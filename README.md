@@ -48,14 +48,14 @@
    ```
 
 2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
 3. **Start development server**
-   ```bash
-   npm run dev
-   ```
+```bash
+npm run dev
+```
 
 4. **Build for production**
    ```bash
