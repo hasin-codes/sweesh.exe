@@ -144,14 +144,14 @@ export default function Home() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2 font-editors">Your Transcriptions</h1>
           <p className="text-gray-300 text-base mb-4">
-            Click the system tray icon or press <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">Alt + M</kbd> to show the voice widget and start recording
+            <strong>Hold</strong> <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">Ctrl + Shift + M</kbd>, <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">Alt + Shift + M</kbd>, or <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">F12</kbd> to show the voice widget, <strong>release</strong> to hide it
           </p>
-          <button
-            onClick={() => window.electronAPI.openActiveWindow()}
-            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 transform hover:scale-105"
-          >
-            ⚡ Open Active Window
-          </button>
+          <div className="text-sm text-gray-400 mb-4">
+            💡 Hold the key combination anywhere on your system to show the voice widget, release to hide it
+          </div>
+          <div className="text-xs text-gray-500 mb-4">
+            Note: Alt+M is reserved by Windows system, so we use alternative combinations. Try F12 for testing.
+          </div>
         </div>
 
         {/* Transcriptions Grid */}

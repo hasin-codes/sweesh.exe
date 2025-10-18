@@ -1,9 +1,12 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut } from 'electron';
 import * as path from 'path';
+import { GlobalKeyboardListener } from 'node-global-key-listener';
 
 let mainWindow: BrowserWindow;
 let activeWindow: BrowserWindow;
 let tray: Tray;
+let keyListener: GlobalKeyboardListener;
+let isActiveWindowVisible = false;
 
 function createWindow(): void {
   // Create the browser window with custom title bar
@@ -52,6 +55,24 @@ function createWindow(): void {
   // Handle opening active window
   ipcMain.handle('open-active-window', () => {
     createActiveWindow();
+  });
+
+  // Handle closing active window
+  ipcMain.handle('close-active-window', () => {
+    if (activeWindow && !activeWindow.isDestroyed()) {
+      activeWindow.hide();
+    }
+  });
+
+  // Handle toggling active window
+  ipcMain.handle('toggle-active-window', () => {
+    if (!activeWindow || activeWindow.isDestroyed()) {
+      createActiveWindow();
+    } else if (activeWindow.isVisible()) {
+      activeWindow.hide();
+    } else {
+      activeWindow.show();
+    }
   });
 
   // Handle window close event
@@ -162,7 +183,120 @@ function createActiveWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  
+  // Wait a bit for the window to be ready
+  setTimeout(() => {
+    console.log('Setting up global keyboard listener for hold/release...');
+    
+    // Initialize the global keyboard listener
+    keyListener = new GlobalKeyboardListener();
+    
+    // Track which keys are currently pressed to prevent rapid firing
+    let pressedKeys = new Set<string>();
+    let isShowing = false;
+    
+    // Listen for key events
+    keyListener.addListener((e, down) => {
+      const keyName = e.name;
+      const isKeyDown = e.state === "DOWN";
+      const isKeyUp = e.state === "UP";
+      
+      // Track pressed keys (only if keyName exists)
+      if (keyName) {
+        if (isKeyDown) {
+          pressedKeys.add(keyName);
+        } else if (isKeyUp) {
+          pressedKeys.delete(keyName);
+        }
+      }
+      
+      // Check for Ctrl+Shift+M combination
+      if (isKeyDown && keyName && keyName === "M" && (pressedKeys.has("LEFT CTRL") || pressedKeys.has("RIGHT CTRL")) && (pressedKeys.has("LEFT SHIFT") || pressedKeys.has("RIGHT SHIFT"))) {
+        if (!isShowing) {
+          console.log('Ctrl+Shift+M held down - showing active window');
+          isShowing = true;
+          if (!activeWindow || activeWindow.isDestroyed()) {
+            createActiveWindow();
+          } else {
+            activeWindow.show();
+            isActiveWindowVisible = true;
+          }
+        }
+      }
+      
+      // Check for Alt+Shift+M combination
+      if (isKeyDown && keyName && keyName === "M" && (pressedKeys.has("LEFT ALT") || pressedKeys.has("RIGHT ALT")) && (pressedKeys.has("LEFT SHIFT") || pressedKeys.has("RIGHT SHIFT"))) {
+        if (!isShowing) {
+          console.log('Alt+Shift+M held down - showing active window');
+          isShowing = true;
+          if (!activeWindow || activeWindow.isDestroyed()) {
+            createActiveWindow();
+          } else {
+            activeWindow.show();
+            isActiveWindowVisible = true;
+          }
+        }
+      }
+      
+      // Check for F12 (simple test)
+      if (isKeyDown && keyName && keyName === "F12") {
+        if (!isShowing) {
+          console.log('F12 held down - showing active window');
+          isShowing = true;
+          if (!activeWindow || activeWindow.isDestroyed()) {
+            createActiveWindow();
+          } else {
+            activeWindow.show();
+            isActiveWindowVisible = true;
+          }
+        }
+      }
+      
+      // Handle key releases
+      if (isKeyUp) {
+        // Check for M key release (when Ctrl+Shift+M or Alt+Shift+M was held)
+        if (keyName && keyName === "M" && ((pressedKeys.has("LEFT CTRL") || pressedKeys.has("RIGHT CTRL")) || (pressedKeys.has("LEFT ALT") || pressedKeys.has("RIGHT ALT")))) {
+          if (isShowing) {
+            console.log('M key released - hiding active window');
+            isShowing = false;
+            if (activeWindow && !activeWindow.isDestroyed() && isActiveWindowVisible) {
+              activeWindow.hide();
+              isActiveWindowVisible = false;
+            }
+          }
+        }
+        
+        // Check for F12 release
+        if (keyName && keyName === "F12") {
+          if (isShowing) {
+            console.log('F12 released - hiding active window');
+            isShowing = false;
+            if (activeWindow && !activeWindow.isDestroyed() && isActiveWindowVisible) {
+              activeWindow.hide();
+              isActiveWindowVisible = false;
+            }
+          }
+        }
+        
+        // Check for modifier key releases (Ctrl, Alt, Shift)
+        if (keyName && (keyName === "LEFT CTRL" || keyName === "RIGHT CTRL" || keyName === "LEFT ALT" || keyName === "RIGHT ALT" || keyName === "LEFT SHIFT" || keyName === "RIGHT SHIFT") && isShowing) {
+          console.log(`${keyName} released - hiding active window`);
+          isShowing = false;
+          if (activeWindow && !activeWindow.isDestroyed() && isActiveWindowVisible) {
+            activeWindow.hide();
+            isActiveWindowVisible = false;
+          }
+        }
+      }
+    });
+    
+    console.log('Global keyboard listener setup complete');
+    console.log('Hold Ctrl+Shift+M, Alt+Shift+M, or F12 to show voice widget');
+    console.log('Release the key to hide the voice widget');
+  }, 1000);
+});
 
 // Prevent app from quitting when all windows are closed (tray behavior)
 app.on('window-all-closed', () => {
@@ -175,6 +309,14 @@ app.on('activate', () => {
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+  }
+});
+
+// Unregister all shortcuts and stop keyboard listener when the app is about to quit
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  if (keyListener) {
+    keyListener.kill();
   }
 });
 
