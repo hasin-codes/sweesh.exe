@@ -26,7 +26,7 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
     <motion.div
       className="fixed inset-0 pointer-events-none z-[9999]"
       initial={{ opacity: 0 }}
-      animate={{ opacity: active ? 1 : 0 }}
+      animate={{ opacity: active ? 0.5 : 0 }}
       transition={{ 
         duration: active ? 0.3 : 1.2, 
         ease: active ? "easeOut" : "easeInOut" 
@@ -36,9 +36,9 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
        <motion.div
          className="absolute top-0 left-0 right-0"
          style={{
-           height: `${12 + (audioLevel * 4)}px`, // Increased height for better corner coverage
-           background: "linear-gradient(90deg, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7)", // No transparent edges
-           filter: `blur(${14 + (audioLevel * 2)}px)`,
+           height: `${24 + (audioLevel * 8)}px`, // 2x thickness
+           background: "linear-gradient(90deg, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7)",
+           filter: `blur(${28 + (audioLevel * 4)}px)`, // 2x blur spread
          }}
          animate={{
            background: [
@@ -61,9 +61,9 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
        <motion.div
          className="absolute bottom-0 left-0 right-0"
          style={{
-           height: `${12 + (audioLevel * 4)}px`, // Increased height for better corner coverage
-           background: "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899)", // No transparent edges
-           filter: `blur(${14 + (audioLevel * 2)}px)`,
+           height: `${24 + (audioLevel * 8)}px`, // 2x thickness
+           background: "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899)",
+           filter: `blur(${28 + (audioLevel * 4)}px)`, // 2x blur spread
          }}
          animate={{
            background: [
@@ -86,9 +86,9 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
        <motion.div
          className="absolute top-0 bottom-0 left-0"
          style={{
-           width: `${12 + (audioLevel * 4)}px`, // Increased width for better corner coverage
-           background: "linear-gradient(180deg, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6)", // No transparent edges
-           filter: `blur(${14 + (audioLevel * 2)}px)`,
+           width: `${24 + (audioLevel * 8)}px`, // 2x thickness
+           background: "linear-gradient(180deg, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6)",
+           filter: `blur(${28 + (audioLevel * 4)}px)`, // 2x blur spread
          }}
          animate={{
            background: [
@@ -111,9 +111,9 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
        <motion.div
          className="absolute top-0 bottom-0 right-0"
          style={{
-           width: `${12 + (audioLevel * 4)}px`, // Increased width for better corner coverage
-           background: "linear-gradient(180deg, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899)", // No transparent edges
-           filter: `blur(${14 + (audioLevel * 2)}px)`,
+           width: `${24 + (audioLevel * 8)}px`, // 2x thickness
+           background: "linear-gradient(180deg, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899)",
+           filter: `blur(${28 + (audioLevel * 4)}px)`, // 2x blur spread
          }}
          animate={{
            background: [
@@ -143,4 +143,3 @@ export default function ActiveApp() {
     </div>
   )
 }
-
