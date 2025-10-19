@@ -1,5 +1,4 @@
 "use client"
-
 export function Titlebar() {
   return (
     <div className="native-titlebar">
@@ -7,10 +6,10 @@ export function Titlebar() {
         {/* Left side - App info */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <img 
-              src="/icons/logo.svg" 
-              alt="Sweesh" 
-              width={18} 
+            <img
+              src="icons/logo.svg"
+              alt="Sweesh"
+              width={18}
               height={18}
               className="rounded-sm"
             />
@@ -19,11 +18,10 @@ export function Titlebar() {
           <div className="h-4 w-px bg-gray-600" />
           <span className="text-xs text-gray-300 font-medium">Voice Transcription</span>
         </div>
-
         {/* Right side - Window controls */}
         <div className="flex items-center gap-2 window-controls">
           {/* Minimize Button */}
-          <button 
+          <button
             className="w-4 h-4 rounded-full bg-gray-600 hover:bg-gray-500 transition-colors duration-200 flex items-center justify-center group"
             onClick={async () => {
               if (window.electronAPI) {
@@ -33,9 +31,9 @@ export function Titlebar() {
           >
             <div className="w-2 h-0.5 bg-gray-300 group-hover:bg-white transition-colors duration-200"></div>
           </button>
-          
+         
           {/* Maximize/Restore Button */}
-          <button 
+          <button
             className="w-4 h-4 rounded-full bg-gray-600 hover:bg-gray-500 transition-colors duration-200 flex items-center justify-center group"
             onClick={async () => {
               if (window.electronAPI) {
@@ -47,9 +45,9 @@ export function Titlebar() {
               <div className="absolute -top-0.5 -left-0.5 w-2 h-2 border border-gray-300 group-hover:border-white transition-colors duration-200"></div>
             </div>
           </button>
-          
+         
           {/* Close Button */}
-          <button 
+          <button
             className="w-4 h-4 rounded-full bg-red-600 hover:bg-red-500 transition-colors duration-200 flex items-center justify-center group"
             onClick={async () => {
               if (window.electronAPI) {
