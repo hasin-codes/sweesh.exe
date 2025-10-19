@@ -12,4 +12,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Active window controls
   minimizeActiveWindow: () => ipcRenderer.invoke('active-window-minimize'),
   toggleMaximizeActiveWindow: () => ipcRenderer.invoke('active-window-toggle-maximize'),
+  // Transcription methods
+  transcribeAudio: (audioBuffer: ArrayBuffer) => ipcRenderer.invoke('transcribe-audio', audioBuffer),
+  sendTranscriptionToMain: (transcriptionData: any) => ipcRenderer.invoke('send-transcription-to-main', transcriptionData),
+  // Event listeners
+  onNewTranscription: (callback: (data: any) => void) => {
+    ipcRenderer.on('new-transcription', (event, data) => callback(data));
+  },
+  removeNewTranscriptionListener: () => {
+    ipcRenderer.removeAllListeners('new-transcription');
+  },
+  // Recording control listeners
+  onStartRecording: (callback: () => void) => {
+    ipcRenderer.on('start-recording', callback);
+  },
+  onStopRecording: (callback: () => void) => {
+    ipcRenderer.on('stop-recording', callback);
+  },
+  removeRecordingListeners: () => {
+    ipcRenderer.removeAllListeners('start-recording');
+    ipcRenderer.removeAllListeners('stop-recording');
+  }
 });

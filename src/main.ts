@@ -2,12 +2,57 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut } from 'electro
 import * as path from 'path';
 import { GlobalKeyboardListener } from 'node-global-key-listener';
 import { exec } from 'child_process';
+import Groq from 'groq-sdk';
+import * as fs from 'fs';
+import * as os from 'os';
+
+// Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
+function loadEnvFromFile(): void {
+  try {
+    // Try dist/.env (when running built code) then project root .env as fallback
+    const candidates = [
+      path.join(__dirname, '..', '.env'),
+      path.join(process.cwd(), '.env'),
+    ];
+    for (const filePath of candidates) {
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        content.split(/\r?\n/).forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return;
+          const eqIndex = trimmed.indexOf('=');
+          if (eqIndex === -1) return;
+          const key = trimmed.slice(0, eqIndex).trim();
+          const value = trimmed.slice(eqIndex + 1).trim();
+          if (!(key in process.env)) {
+            process.env[key] = value;
+          }
+        });
+        break;
+      }
+    }
+  } catch (e) {
+    console.log('Warning: failed to load .env file', e);
+  }
+}
+
+// Load env before initializing API clients
+loadEnvFromFile();
 
 let mainWindow: BrowserWindow;
 let activeWindow: BrowserWindow;
 let tray: Tray;
 let keyListener: GlobalKeyboardListener;
 let isActiveWindowVisible = false;
+
+// Initialize Groq client
+const groqApiKey = process.env.GROQ_API_KEY;
+if (!groqApiKey) {
+  console.log('GROQ_API_KEY is not set. Please create a .env with GROQ_API_KEY=... or set the environment variable.');
+}
+const groq = new Groq({
+  apiKey: groqApiKey || 'invalid',
+});
 
 function createWindow(): void {
   // Create the browser window with custom title bar
@@ -73,6 +118,47 @@ function createWindow(): void {
       activeWindow.hide();
     } else {
       activeWindow.show();
+    }
+  });
+
+  // Handle transcription with Groq Whisper API
+  ipcMain.handle('transcribe-audio', async (event, audioBuffer: ArrayBuffer) => {
+    try {
+      console.log('Starting transcription with Groq Whisper API...');
+      
+      // Create temporary file for audio
+      const tempDir = os.tmpdir();
+      const tempFilePath = path.join(tempDir, `recording_${Date.now()}.webm`);
+      
+      // Write audio buffer to file
+      fs.writeFileSync(tempFilePath, Buffer.from(audioBuffer));
+      
+      // Read file as stream for Groq API
+      const audioFile = fs.createReadStream(tempFilePath);
+      
+      // Call Groq Whisper API
+      const transcription = await groq.audio.transcriptions.create({
+        file: audioFile,
+        model: "whisper-large-v3",
+        response_format: "text"
+      });
+      
+      // Clean up temporary file
+      fs.unlinkSync(tempFilePath);
+      
+      console.log('Transcription completed:', transcription);
+      return { success: true, text: transcription };
+      
+    } catch (error) {
+      console.error('Transcription failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Handle sending transcription to main window
+  ipcMain.handle('send-transcription-to-main', (event, transcriptionData) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('new-transcription', transcriptionData);
     }
   });
 
@@ -453,13 +539,17 @@ app.whenReady().then(() => {
       // Check for Ctrl+Shift+M combination
       if (isKeyDown && keyName && keyName === "M" && (pressedKeys.has("LEFT CTRL") || pressedKeys.has("RIGHT CTRL")) && (pressedKeys.has("LEFT SHIFT") || pressedKeys.has("RIGHT SHIFT"))) {
         if (!isShowing) {
-          console.log('Ctrl+Shift+M held down - showing active window');
+          console.log('Ctrl+Shift+M held down - showing active window and starting recording');
           isShowing = true;
           if (!activeWindow || activeWindow.isDestroyed()) {
             createActiveWindow();
           } else {
             activeWindow.show();
             isActiveWindowVisible = true;
+          }
+          // Trigger recording start in active window
+          if (activeWindow && !activeWindow.isDestroyed()) {
+            activeWindow.webContents.send('start-recording');
           }
         }
       }
@@ -467,7 +557,7 @@ app.whenReady().then(() => {
       // Check for Alt+Shift+M combination
       if (isKeyDown && keyName && keyName === "M" && (pressedKeys.has("LEFT ALT") || pressedKeys.has("RIGHT ALT")) && (pressedKeys.has("LEFT SHIFT") || pressedKeys.has("RIGHT SHIFT"))) {
         if (!isShowing) {
-          console.log('Alt+Shift+M held down - showing active window');
+          console.log('Alt+Shift+M held down - showing active window and starting recording');
           isShowing = true;
           if (!activeWindow || activeWindow.isDestroyed()) {
             createActiveWindow();
@@ -475,19 +565,27 @@ app.whenReady().then(() => {
             activeWindow.show();
             isActiveWindowVisible = true;
           }
+          // Trigger recording start in active window
+          if (activeWindow && !activeWindow.isDestroyed()) {
+            activeWindow.webContents.send('start-recording');
+          }
         }
       }
       
       // Check for F12 (simple test)
       if (isKeyDown && keyName && keyName === "F12") {
         if (!isShowing) {
-          console.log('F12 held down - showing active window');
+          console.log('F12 held down - showing active window and starting recording');
           isShowing = true;
           if (!activeWindow || activeWindow.isDestroyed()) {
             createActiveWindow();
           } else {
             activeWindow.show();
             isActiveWindowVisible = true;
+          }
+          // Trigger recording start in active window
+          if (activeWindow && !activeWindow.isDestroyed()) {
+            activeWindow.webContents.send('start-recording');
           }
         }
       }
@@ -497,7 +595,11 @@ app.whenReady().then(() => {
         // Check for M key release (when Ctrl+Shift+M or Alt+Shift+M was held)
         if (keyName && keyName === "M" && ((pressedKeys.has("LEFT CTRL") || pressedKeys.has("RIGHT CTRL")) || (pressedKeys.has("LEFT ALT") || pressedKeys.has("RIGHT ALT")))) {
           if (isShowing) {
-            console.log('M key released - hiding active window');
+            console.log('M key released - stopping recording and hiding active window');
+            // Stop recording first
+            if (activeWindow && !activeWindow.isDestroyed()) {
+              activeWindow.webContents.send('stop-recording');
+            }
             isShowing = false;
             if (activeWindow && !activeWindow.isDestroyed() && isActiveWindowVisible) {
               activeWindow.hide();
@@ -509,7 +611,11 @@ app.whenReady().then(() => {
         // Check for F12 release
         if (keyName && keyName === "F12") {
           if (isShowing) {
-            console.log('F12 released - hiding active window');
+            console.log('F12 released - stopping recording and hiding active window');
+            // Stop recording first
+            if (activeWindow && !activeWindow.isDestroyed()) {
+              activeWindow.webContents.send('stop-recording');
+            }
             isShowing = false;
             if (activeWindow && !activeWindow.isDestroyed() && isActiveWindowVisible) {
               activeWindow.hide();
@@ -520,7 +626,11 @@ app.whenReady().then(() => {
         
         // Check for modifier key releases (Ctrl, Alt, Shift)
         if (keyName && (keyName === "LEFT CTRL" || keyName === "RIGHT CTRL" || keyName === "LEFT ALT" || keyName === "RIGHT ALT" || keyName === "LEFT SHIFT" || keyName === "RIGHT SHIFT") && isShowing) {
-          console.log(`${keyName} released - hiding active window`);
+          console.log(`${keyName} released - stopping recording and hiding active window`);
+          // Stop recording first
+          if (activeWindow && !activeWindow.isDestroyed()) {
+            activeWindow.webContents.send('stop-recording');
+          }
           isShowing = false;
           if (activeWindow && !activeWindow.isDestroyed() && isActiveWindowVisible) {
             activeWindow.hide();

@@ -8,7 +8,7 @@ export function Titlebar() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <img 
-              src="/icons/logo.png" 
+              src="/icons/logo.svg" 
               alt="Sweesh" 
               width={18} 
               height={18}

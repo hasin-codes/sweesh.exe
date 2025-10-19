@@ -25,7 +25,7 @@
 - **Custom Font**: Elegant "EditorsNote" typography throughout the app
 
 ### Advanced Features
-- **Settings Management**: Configure API keys, save locations, and preferences
+- **Settings Management**: Configure API keys (Groq), save locations, and preferences
 - **Microphone Permissions**: Built-in permission handling and OS settings access
 - **Transcription Editing**: In-place editing of transcribed text
 - **Export Functionality**: Copy transcriptions to clipboard
@@ -35,7 +35,7 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v16 or higher)
+- Node.js (v18 or higher)
 - npm or yarn package manager
 - Git
 
@@ -52,12 +52,18 @@
 npm install
 ```
 
-3. **Start development server**
+3. **Configure environment**
+```bash
+cp .env.example .env  # if available, otherwise create .env
+```
+Then set your Groq API key in `.env` (see Configuration below).
+
+4. **Start development server**
 ```bash
 npm run dev
 ```
 
-4. **Build for production**
+5. **Build for production**
    ```bash
    npm run build
    npm start
@@ -110,6 +116,7 @@ sweesh/
 - **UI Components**: Custom components with Radix UI primitives
 - **Icons**: Lucide React
 - **Font**: Custom "EditorsNote" typography
+- **Transcription**: Groq Whisper via `groq-sdk`
 
 ### Available Scripts
 
@@ -156,18 +163,19 @@ sweesh/
 ## ⚙️ Configuration
 
 ### Settings Options
-- **Whisper API Key**: Configure your OpenAI Whisper API key
+- **Groq API Key**: Configure your Groq API key for Whisper transcription
 - **File Save Location**: Choose where to save audio files
 - **Auto Save**: Enable/disable automatic file saving
 - **Dark Mode**: Toggle between light and dark themes
 - **Microphone Permissions**: Manage microphone access
 
 ### Environment Variables
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (the app loads it at runtime):
 ```env
-WHISPER_API_KEY=your_api_key_here
+GROQ_API_KEY=your_actual_api_key_here
 NODE_ENV=development
 ```
+Refer to `SETUP.md` for a quick start guide to obtaining a Groq API key.
 
 ## 🔧 Building and Distribution
 
@@ -199,10 +207,33 @@ The project includes pre-built executables for multiple platforms:
 6. Edit, copy, or delete transcriptions as needed
 
 ### Keyboard Shortcuts
-- `Alt + M`: Open/close the active recording window
-- `Ctrl + N`: Create new transcription
-- `Ctrl + ,`: Open settings
+- Hold `Ctrl + Shift + M`: Show voice widget and start recording; release to stop
+- Hold `Alt + Shift + M`: Show voice widget and start recording; release to stop
+- Press `F12`: Show voice widget and start recording; release to stop
+  - Note: Some OS-level shortcuts (e.g., Alt+M on Windows) may conflict; use `F12` for testing.
+- `Ctrl + N`: Create new transcription (in app)
+- `Ctrl + ,`: Open settings (in app)
 - `Escape`: Close modals and windows
+
+## 🧱 Architecture
+
+### Overview
+- **Main Process** (`src/main.ts`): Creates windows, manages tray, registers global keyboard listener, handles transcription via Groq Whisper, and orchestrates IPC.
+- **Preload** (`src/preload.ts`): Exposes a safe `electronAPI` bridge with window controls, active window controls, transcription methods, and event subscriptions.
+- **Renderer (Main Window)** (`src/renderer/App.tsx` and components): Displays and manages transcriptions; listens for `new-transcription` events sent from main.
+- **Active Window** (`src/renderer/active.html` + logic): Fullscreen, frameless overlay used for hold-to-talk recording UX; receives `start-recording`/`stop-recording` events from main.
+
+### Data Flow
+1. User holds a global shortcut (e.g., Ctrl+Shift+M/F12). The main process shows the Active Window and sends `start-recording`.
+2. The Active Window records audio and sends the audio buffer to main via `electronAPI.transcribeAudio` (IPC `transcribe-audio`).
+3. Main process writes a temp file, calls Groq Whisper (`groq-sdk`) to transcribe, deletes the temp file, and returns `{ success, text }`.
+4. Main process forwards successful transcription to the main window via `new-transcription` event; renderer updates UI.
+
+### IPC Channels (high-level)
+- Window controls: `window-minimize`, `window-toggle-maximize`, `window-close`
+- Active window controls: `open-active-window`, `close-active-window`, `toggle-active-window`, `active-window-minimize`, `active-window-toggle-maximize`, `active-window-close`
+- Recording control events: `start-recording`, `stop-recording`
+- Transcription: `transcribe-audio`, `send-transcription-to-main`; renderer listens on `new-transcription`
 
 ### Recording Workflow
 1. Click the "Open Active Window" button
@@ -238,7 +269,7 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - Verify microphone is not being used by another application
 
 **Transcription not working:**
-- Verify your Whisper API key is correctly configured
+- Verify your Groq API key is correctly configured
 - Check your internet connection
 - Ensure microphone is working properly
 
@@ -277,7 +308,7 @@ We welcome contributions! Please follow these steps:
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. Include a `LICENSE` file if distributing.
 
 ## 🙏 Acknowledgments
 
@@ -290,12 +321,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-If you encounter any issues or have questions:
+If you encounter issues or have questions:
 
-1. Check the [Issues](https://github.com/yourusername/sweesh/issues) page
-2. Create a new issue with detailed information
-3. Include your operating system and app version
-4. Provide steps to reproduce any bugs
+1. Open an issue in your repository's Issues tab
+2. Include OS, app version, and reproduction steps
 
 ## 🔮 Roadmap
 
