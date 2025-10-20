@@ -12,8 +12,11 @@
     "build:main:watch": "tsc src/main.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --skipLibCheck --watch",
     "clean": "rimraf dist",
     "rebuild": "npm run clean && npm run build:main && npm run build",
-    "dist": "npm run rebuild && electron-builder -mwl",
-    "release": "npm run rebuild && electron-builder -mwl --publish always"
+    "dist": "npm run rebuild && electron-builder",
+    "dist:win": "npm run rebuild && electron-builder --win",
+    "dist:mac": "npm run rebuild && electron-builder --mac",
+    "dist:linux": "npm run rebuild && electron-builder --linux",
+    "release": "npm run rebuild && electron-builder --publish always"
   },
   "keywords": [
     "electron",
