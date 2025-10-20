@@ -456,7 +456,13 @@ function createWindow(): void {
       
       // Show toast notification about encryption method
       if (encryptionAvailable) {
-        const backend = safeStorage.getSelectedStorageBackend();
+        let backend: string = 'unknown';
+        try {
+          const anySafe: any = safeStorage as unknown as any;
+          if (typeof anySafe.getSelectedStorageBackend === 'function') {
+            backend = anySafe.getSelectedStorageBackend();
+          }
+        } catch {}
         mainWindow?.webContents.send('toast-notification', {
           message: `API key saved with OS-level encryption (${backend})`,
           type: 'success'

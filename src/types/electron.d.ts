@@ -36,6 +36,9 @@ export interface ElectronAPI {
   // Toast notifications
   onToastNotification: (callback: (data: {message: string, type: string}) => void) => void;
   removeToastListener: () => void;
+  // Persistence
+  loadTranscriptions: () => Promise<any[]>;
+  saveTranscriptions: (transcriptions: any[]) => Promise<{success: boolean}>;
   // Onboarding management
   checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean}>;
   completeOnboarding: () => Promise<boolean>;
