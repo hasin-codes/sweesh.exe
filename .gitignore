@@ -406,3 +406,4 @@ node_modules/.cache/
 # Rush
 common/temp/
 rules/colors.mdc
+release.md
