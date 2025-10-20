@@ -67,7 +67,9 @@
     "files": [
       "dist/**",
       "public/icons/**",
-      "package.json"
+      "package.json",
+      "!**/node_modules/node-global-key-listener/bin/MacKeyServer",
+      "!**/node_modules/node-global-key-listener/bin/MacKeyServerHelper*"
     ],
     "directories": {
       "buildResources": "public"
