@@ -7,6 +7,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -31,4 +33,7 @@ jobs:
       - name: Package and publish
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: npx electron-builder -mwl --publish always
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then npx electron-builder -l --publish always; fi
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then npx electron-builder -w --publish always; fi
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then npx electron-builder -m --publish always; fi
