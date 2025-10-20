@@ -1,5 +1,5 @@
 {
-  "name": "sweesh-electron-react",
+  "name": "sweesh",
   "version": "1.0.0",
   "description": "React + Electron app with TypeScript",
   "main": "dist/main.js",
