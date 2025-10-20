@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard } from 'electron';
 import * as path from 'path';
 import { GlobalKeyboardListener } from 'node-global-key-listener';
 import { exec } from 'child_process';
@@ -147,6 +147,18 @@ function createWindow(): void {
       fs.unlinkSync(tempFilePath);
       
       console.log('Transcription completed:', transcription);
+      
+      // Automatically copy transcription to clipboard (works even when app is in background)
+      try {
+        // Groq API returns the transcription text directly when response_format is "text"
+        const transcriptionText = typeof transcription === 'string' ? transcription : String(transcription);
+        clipboard.writeText(transcriptionText);
+        console.log('Transcription copied to clipboard automatically');
+      } catch (clipboardError) {
+        console.error('Failed to copy to clipboard:', clipboardError);
+        // Continue with transcription even if clipboard fails
+      }
+      
       return { success: true, text: transcription };
       
     } catch (error) {
