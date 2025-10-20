@@ -18,6 +18,28 @@ export interface ElectronAPI {
   onStartRecording: (callback: () => void) => void;
   onStopRecording: (callback: () => void) => void;
   removeRecordingListeners: () => void;
+  // API Key Management
+  saveApiKey: (apiKey: string) => Promise<{success: boolean, error?: string}>;
+  getApiKeyStatus: () => Promise<{hasKey: boolean, maskedKey?: string}>;
+  updateApiKey: (apiKey: string) => Promise<{success: boolean, error?: string}>;
+  deleteApiKey: () => Promise<{success: boolean, error?: string}>;
+  getEncryptionStatus: () => Promise<{
+    isEncryptionAvailable: boolean;
+    encryptionBackend: string;
+    platform: string;
+    warningMessage?: string;
+    setupInstructions?: {
+      title: string;
+      steps: string[];
+    };
+  }>;
+  // Toast notifications
+  onToastNotification: (callback: (data: {message: string, type: string}) => void) => void;
+  removeToastListener: () => void;
+  // Onboarding management
+  checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean}>;
+  completeOnboarding: () => Promise<boolean>;
+  skipOnboarding: () => Promise<boolean>;
 }
 
 declare global {

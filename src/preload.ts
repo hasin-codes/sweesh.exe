@@ -32,5 +32,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeRecordingListeners: () => {
     ipcRenderer.removeAllListeners('start-recording');
     ipcRenderer.removeAllListeners('stop-recording');
-  }
+  },
+  // API Key Management
+  saveApiKey: (apiKey: string) => ipcRenderer.invoke('save-api-key', apiKey),
+  getApiKeyStatus: () => ipcRenderer.invoke('get-api-key-status'),
+  updateApiKey: (apiKey: string) => ipcRenderer.invoke('update-api-key', apiKey),
+  deleteApiKey: () => ipcRenderer.invoke('delete-api-key'),
+  getEncryptionStatus: () => ipcRenderer.invoke('get-encryption-status'),
+  // Toast notifications
+  onToastNotification: (callback: (data: {message: string, type: string}) => void) => {
+    ipcRenderer.on('toast-notification', (event, data) => callback(data));
+  },
+  removeToastListener: () => {
+    ipcRenderer.removeAllListeners('toast-notification');
+  },
+  // Onboarding management
+  checkOnboardingStatus: () => ipcRenderer.invoke('check-onboarding-status'),
+  completeOnboarding: () => ipcRenderer.invoke('complete-onboarding'),
+  skipOnboarding: () => ipcRenderer.invoke('skip-onboarding')
 });

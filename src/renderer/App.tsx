@@ -6,6 +6,7 @@ import { Topbar } from "@/components/layout/sidebar"
 import { TranscriptionCard } from "@/components/layout/transcription-card"
 import { SettingsModal } from "@/components/ui/settings-modal"
 import { TranscriptionModal } from "@/components/ui/transcription-modal"
+import { OnboardingModal } from "@/components/ui/onboarding-modal"
 
 interface Transcription {
   id: number
@@ -20,15 +21,29 @@ export default function Home() {
   const [audioLevel, setAudioLevel] = useState(0.1)
   const [showSettings, setShowSettings] = useState(false)
   const [showTranscriptionModal, setShowTranscriptionModal] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null)
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([
-    {
-      id: 1,
-      file: "demo_001.webm",
-      text: "This is a demo transcription. Hold Ctrl+Shift+M, Alt+Shift+M, or F12 to start recording and see real transcriptions here!",
-      date: new Date().toISOString(),
-    },
+    
   ])
+
+  // Check onboarding status on mount
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (window.electronAPI) {
+        try {
+          const status = await window.electronAPI.checkOnboardingStatus()
+          if (!status.completed) {
+            setShowOnboarding(true)
+          }
+        } catch (error) {
+          console.error('Failed to check onboarding status:', error)
+        }
+      }
+    }
+
+    checkOnboardingStatus()
+  }, [])
 
   // Listen for new transcriptions from the active window
   useEffect(() => {
@@ -87,14 +102,14 @@ export default function Home() {
     )
   }
 
-  const addNewTranscription = () => {
-    const newTranscription: Transcription = {
-      id: Date.now(),
-      file: `New Recording - ${new Date().toLocaleDateString()}`,
-      text: "This is a demo transcription that was just created. You can edit or delete it as needed.",
-      date: new Date().toISOString(),
+  const addNewTranscription = async () => {
+    try {
+      if (window.electronAPI?.openActiveWindow) {
+        await window.electronAPI.openActiveWindow()
+      }
+    } catch (error) {
+      console.error('Failed to open active window for recording:', error)
     }
-    setTranscriptions((prev) => [newTranscription, ...prev])
   }
 
   return (
@@ -175,6 +190,13 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <OnboardingModal 
+          onComplete={() => setShowOnboarding(false)} 
+        />
+      )}
 
       {/* Settings Modal */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}

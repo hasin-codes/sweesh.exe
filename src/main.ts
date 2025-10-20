@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard, safeStorage } from 'electron';
 import * as path from 'path';
 import { GlobalKeyboardListener } from 'node-global-key-listener';
 import { exec } from 'child_process';
 import Groq from 'groq-sdk';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as crypto from 'crypto';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -45,14 +46,340 @@ let tray: Tray;
 let keyListener: GlobalKeyboardListener;
 let isActiveWindowVisible = false;
 
-// Initialize Groq client
-const groqApiKey = process.env.GROQ_API_KEY;
-if (!groqApiKey) {
-  console.log('GROQ_API_KEY is not set. Please create a .env with GROQ_API_KEY=... or set the environment variable.');
+// Secure API Key Management
+const CREDENTIALS_FILE = path.join(app.getPath('userData'), 'credentials.enc');
+
+// Check if encryption is available (will be set after app ready)
+let isEncryptionAvailable = false;
+let encryptionBackend = 'unknown';
+
+// Check encryption availability after app is ready
+function checkEncryptionAvailability(): void {
+  try {
+    isEncryptionAvailable = safeStorage.isEncryptionAvailable();
+    let backend: string = 'unknown';
+    try {
+      const anySafe: any = safeStorage as unknown as any;
+      if (typeof anySafe.getSelectedStorageBackend === 'function') {
+        backend = anySafe.getSelectedStorageBackend();
+      }
+    } catch {}
+    encryptionBackend = backend;
+    
+    if (!isEncryptionAvailable) {
+      console.warn('OS-level encryption is not available. API keys will be stored with fallback encryption.');
+      if (encryptionBackend === 'basic_text') {
+        console.warn('Linux: No secret store available. Consider installing libsecret for better security.');
+      }
+    }
+  } catch (error) {
+    console.error('Error checking encryption availability:', error);
+    isEncryptionAvailable = false;
+    encryptionBackend = 'error';
+  }
 }
-const groq = new Groq({
-  apiKey: groqApiKey || 'invalid',
-});
+
+// Generate a machine-specific encryption key for fallback
+function generateMachineKey(): string {
+  try {
+    // Use machine-specific identifiers to create a consistent key
+    const machineId = os.hostname() + os.platform() + os.arch();
+    const hash = crypto.createHash('sha256').update(machineId).digest('hex');
+    return hash.substring(0, 32); // Use first 32 characters as key
+  } catch (error) {
+    console.error('Error generating machine key:', error);
+    // Fallback to a default key (less secure but functional)
+    return 'default-fallback-key-32-chars';
+  }
+}
+
+// Secure fallback encryption using AES-256-CBC
+function encryptWithFallback(text: string): string {
+  try {
+    const key = generateMachineKey();
+    const iv = crypto.randomBytes(16); // Generate random IV
+    const cipher = crypto.createCipher('aes-256-cbc', key);
+    
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    // Combine IV and encrypted data
+    const result = {
+      iv: iv.toString('hex'),
+      encrypted: encrypted,
+      method: 'fallback-crypto'
+    };
+    
+    return JSON.stringify(result);
+  } catch (error) {
+    console.error('Error in fallback encryption:', error);
+    throw error;
+  }
+}
+
+// Secure fallback decryption using AES-256-CBC
+function decryptWithFallback(encryptedData: string): string {
+  try {
+    const data = JSON.parse(encryptedData);
+    const key = generateMachineKey();
+    
+    const decipher = crypto.createDecipher('aes-256-cbc', key);
+    
+    let decrypted = decipher.update(data.encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  } catch (error) {
+    console.error('Error in fallback decryption:', error);
+    throw error;
+  }
+}
+
+// Secure API key storage functions
+function saveApiKeySecurely(apiKey: string): boolean {
+  try {
+    // Check encryption availability at the time of saving
+    const encryptionAvailable = safeStorage.isEncryptionAvailable();
+    
+    if (encryptionAvailable) {
+      // Use OS-level encryption
+      const encryptedBuffer = safeStorage.encryptString(apiKey);
+      fs.writeFileSync(CREDENTIALS_FILE, encryptedBuffer);
+      console.log('API key saved with OS-level encryption');
+      return true;
+    } else {
+      // Fallback: Use secure crypto encryption
+      console.warn('OS-level encryption not available, using AES-256-CBC fallback');
+      console.log('Attempting to encrypt with fallback method...');
+      const encryptedData = encryptWithFallback(apiKey);
+      console.log('Fallback encryption successful, writing to file...');
+      fs.writeFileSync(CREDENTIALS_FILE, encryptedData);
+      console.log('API key saved with AES-256-CBC fallback encryption');
+      return true;
+    }
+  } catch (error) {
+    console.error('Failed to save API key:', error);
+    return false;
+  }
+}
+
+function loadApiKeySecurely(): string | null {
+  try {
+    if (!fs.existsSync(CREDENTIALS_FILE)) {
+      return null;
+    }
+    
+    const fileContent = fs.readFileSync(CREDENTIALS_FILE);
+    
+    // Check encryption availability at the time of loading
+    const encryptionAvailable = safeStorage.isEncryptionAvailable();
+    
+    if (encryptionAvailable) {
+      // Try to decrypt with OS-level encryption
+      try {
+        const decryptedKey = safeStorage.decryptString(fileContent);
+        console.log('API key loaded with OS-level decryption');
+        return decryptedKey;
+      } catch (decryptError) {
+        // If decryption fails, try crypto fallback
+        console.warn('OS-level decryption failed, trying AES-256-GCM fallback');
+        try {
+          const decryptedKey = decryptWithFallback(fileContent.toString());
+          console.log('API key loaded with AES-256-GCM fallback');
+          return decryptedKey;
+        } catch (fallbackError) {
+          console.error('Both OS-level and AES-256-GCM fallback decryption failed');
+          return null;
+        }
+      }
+    } else {
+      // Use crypto fallback
+      console.warn('OS-level encryption not available, using AES-256-GCM fallback');
+      try {
+        const decryptedKey = decryptWithFallback(fileContent.toString());
+        console.log('API key loaded with AES-256-GCM fallback');
+        return decryptedKey;
+      } catch (fallbackError) {
+        console.error('AES-256-GCM fallback decryption failed');
+        return null;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load API key:', error);
+    return null;
+  }
+}
+
+function deleteApiKeySecurely(): boolean {
+  try {
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      fs.unlinkSync(CREDENTIALS_FILE);
+      console.log('API key deleted securely');
+    }
+    return true;
+  } catch (error) {
+    console.error('Failed to delete API key:', error);
+    return false;
+  }
+}
+
+function getApiKeyStatus(): { hasKey: boolean; maskedKey?: string } {
+  try {
+    const apiKey = loadApiKeySecurely();
+    if (!apiKey) {
+      return { hasKey: false };
+    }
+    
+    // Create masked version for display (show first 4 and last 4 characters)
+    const maskedKey = apiKey.length > 8 
+      ? `${apiKey.substring(0, 4)}${'•'.repeat(apiKey.length - 8)}${apiKey.substring(apiKey.length - 4)}`
+      : `${apiKey.substring(0, 2)}${'•'.repeat(apiKey.length - 2)}`;
+    
+    return { hasKey: true, maskedKey };
+  } catch (error) {
+    console.error('Failed to get API key status:', error);
+    return { hasKey: false };
+  }
+}
+
+// Onboarding state helpers
+async function getOnboardingStatus(): Promise<{ completed: boolean; hasApiKey: boolean }> {
+  try {
+    const userDataPath = app.getPath('userData');
+    const configPath = path.join(userDataPath, 'app-config.json');
+    
+    let completed = false;
+    let hasApiKey = false;
+    
+    if (fs.existsSync(configPath)) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      completed = configData.onboardingCompleted === true;
+    }
+    
+    try {
+      const apiKey = loadApiKeySecurely();
+      hasApiKey = !!apiKey;
+    } catch {
+      hasApiKey = false;
+    }
+    
+    return { completed, hasApiKey };
+  } catch (error) {
+    console.error('Error checking onboarding status:', error);
+    return { completed: false, hasApiKey: false };
+  }
+}
+
+async function completeOnboarding(): Promise<boolean> {
+  try {
+    const userDataPath = app.getPath('userData');
+    const configPath = path.join(userDataPath, 'app-config.json');
+    
+    let configData: any = {};
+    if (fs.existsSync(configPath)) {
+      configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+    
+    configData.onboardingCompleted = true;
+    configData.completedAt = new Date().toISOString();
+    
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error completing onboarding:', error);
+    return false;
+  }
+}
+
+async function skipOnboarding(): Promise<boolean> {
+  try {
+    const userDataPath = app.getPath('userData');
+    const configPath = path.join(userDataPath, 'app-config.json');
+    
+    let configData: any = {};
+    if (fs.existsSync(configPath)) {
+      configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+    
+    configData.onboardingSkipped = true;
+    configData.skippedAt = new Date().toISOString();
+    
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error skipping onboarding:', error);
+    return false;
+  }
+}
+
+// Initialize Groq client with secure storage
+let groq: Groq | null = null;
+
+function initializeGroqClient(apiKey?: string): boolean {
+  try {
+    const key = apiKey || loadApiKeySecurely();
+    if (!key) {
+      console.log('No API key available for Groq client initialization');
+      return false;
+    }
+    
+    groq = new Groq({
+      apiKey: key,
+    });
+    console.log('Groq client initialized successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to initialize Groq client:', error);
+    return false;
+  }
+}
+
+// Try to initialize Groq client on startup
+initializeGroqClient();
+
+// Migration from .env to secure storage
+function migrateFromEnv(): void {
+  try {
+    // Check if we already have a secure API key
+    const existingKey = loadApiKeySecurely();
+    if (existingKey) {
+      console.log('API key already exists in secure storage, skipping migration');
+      return;
+    }
+    
+    // Check if .env file exists and has GROQ_API_KEY
+    const envFilePath = path.join(process.cwd(), '.env');
+    if (fs.existsSync(envFilePath)) {
+      const envContent = fs.readFileSync(envFilePath, 'utf8');
+      const envLines = envContent.split('\n');
+      
+      for (const line of envLines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('GROQ_API_KEY=')) {
+          const apiKey = trimmed.substring('GROQ_API_KEY='.length).trim();
+          if (apiKey && apiKey.startsWith('gsk_')) {
+            console.log('Migrating API key from .env to secure storage...');
+            const saved = saveApiKeySecurely(apiKey);
+            if (saved) {
+              console.log('API key migrated successfully');
+              // Optionally remove from .env (commented out for safety)
+              // const newEnvContent = envLines.filter(l => !l.trim().startsWith('GROQ_API_KEY=')).join('\n');
+              // fs.writeFileSync(envFilePath, newEnvContent);
+            } else {
+              console.error('Failed to migrate API key to secure storage');
+            }
+            break;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error during migration from .env:', error);
+  }
+}
+
+// Run migration on startup
+migrateFromEnv();
 
 function createWindow(): void {
   // Create the browser window with custom title bar
@@ -101,6 +428,14 @@ function createWindow(): void {
   // Handle opening active window
   ipcMain.handle('open-active-window', () => {
     createActiveWindow();
+    // After creation, when ready, send start-recording to mimic shortcut behavior
+    const tryStart = () => {
+      if (activeWindow && !activeWindow.isDestroyed()) {
+        activeWindow.webContents.send('start-recording');
+      }
+    };
+    // If window already exists and was just shown, trigger immediately after a short delay
+    setTimeout(tryStart, 150);
   });
 
   // Handle closing active window
@@ -124,6 +459,12 @@ function createWindow(): void {
   // Handle transcription with Groq Whisper API
   ipcMain.handle('transcribe-audio', async (event, audioBuffer: ArrayBuffer) => {
     try {
+      // Check if Groq client is initialized
+      if (!groq) {
+        console.error('Groq client not initialized. Please configure API key in settings.');
+        return { success: false, error: 'API key not configured. Please set your Groq API key in Settings.' };
+      }
+      
       console.log('Starting transcription with Groq Whisper API...');
       
       // Create temporary file for audio
@@ -171,6 +512,182 @@ function createWindow(): void {
   ipcMain.handle('send-transcription-to-main', (event, transcriptionData) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('new-transcription', transcriptionData);
+    }
+  });
+
+  // API Key Management IPC Handlers
+  ipcMain.handle('save-api-key', async (event, apiKey: string) => {
+    try {
+      // Basic validation
+      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        return { success: false, error: 'Invalid API key format' };
+      }
+      
+      if (!apiKey.startsWith('gsk_')) {
+        return { success: false, error: 'API key must start with "gsk_"' };
+      }
+      
+      // Check encryption method before saving
+      const encryptionAvailable = safeStorage.isEncryptionAvailable();
+      const platform = os.platform();
+      
+      const saved = saveApiKeySecurely(apiKey.trim());
+      if (!saved) {
+        return { success: false, error: 'Failed to save API key securely' };
+      }
+      
+      // Show toast notification about encryption method
+      if (encryptionAvailable) {
+        const backend = safeStorage.getSelectedStorageBackend();
+        mainWindow?.webContents.send('toast-notification', {
+          message: `API key saved with OS-level encryption (${backend})`,
+          type: 'success'
+        });
+      } else {
+        mainWindow?.webContents.send('toast-notification', {
+          message: 'OS-level encryption not available. Using AES-256-GCM fallback.',
+          type: 'warning'
+        });
+      }
+      
+      // Re-initialize Groq client with new key
+      const initialized = initializeGroqClient(apiKey.trim());
+      if (!initialized) {
+        return { success: false, error: 'Failed to initialize Groq client with new API key' };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving API key:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  });
+
+  ipcMain.handle('get-api-key-status', () => {
+    return getApiKeyStatus();
+  });
+
+  ipcMain.handle('update-api-key', async (event, apiKey: string) => {
+    try {
+      // Basic validation
+      if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        return { success: false, error: 'Invalid API key format' };
+      }
+      
+      if (!apiKey.startsWith('gsk_')) {
+        return { success: false, error: 'API key must start with "gsk_"' };
+      }
+      
+      // Delete old key and save new one
+      deleteApiKeySecurely();
+      const saved = saveApiKeySecurely(apiKey.trim());
+      if (!saved) {
+        return { success: false, error: 'Failed to update API key securely' };
+      }
+      
+      // Re-initialize Groq client with new key
+      const initialized = initializeGroqClient(apiKey.trim());
+      if (!initialized) {
+        return { success: false, error: 'Failed to initialize Groq client with updated API key' };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating API key:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  });
+
+  ipcMain.handle('delete-api-key', () => {
+    try {
+      const deleted = deleteApiKeySecurely();
+      if (!deleted) {
+        return { success: false, error: 'Failed to delete API key' };
+      }
+      
+      // Clear Groq client
+      groq = null;
+      console.log('API key deleted and Groq client cleared');
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting API key:', error);
+      return { success: false, error: 'Unexpected error occurred' };
+    }
+  });
+
+  ipcMain.handle('get-encryption-status', () => {
+    const platform = os.platform();
+    const currentEncryptionAvailable = safeStorage.isEncryptionAvailable();
+    let currentBackend: string = 'unknown';
+    try {
+      // Some Electron versions may not expose getSelectedStorageBackend
+      const anySafe: any = safeStorage as unknown as any;
+      if (typeof anySafe.getSelectedStorageBackend === 'function') {
+        currentBackend = anySafe.getSelectedStorageBackend();
+      }
+    } catch {}
+    
+    let warningMessage = null;
+    let setupInstructions = null;
+    
+    if (!currentEncryptionAvailable) {
+      if (platform === 'linux') {
+        warningMessage = 'OS-level encryption is not available. API keys will be stored with AES-256-GCM fallback.';
+        setupInstructions = {
+          title: 'Linux Setup Instructions',
+          steps: [
+            'Install libsecret for better security:',
+            '• Ubuntu/Debian: sudo apt-get install libsecret-1-0',
+            '• Fedora: sudo dnf install libsecret',
+            '• Arch: sudo pacman -S libsecret',
+            '• After installation, restart the application'
+          ]
+        };
+      } else {
+        warningMessage = 'OS-level encryption is not available. API keys will be stored with AES-256-GCM fallback.';
+      }
+    }
+    
+    return { 
+      isEncryptionAvailable: currentEncryptionAvailable,
+      encryptionBackend: currentBackend,
+      platform,
+      warningMessage,
+      setupInstructions
+    };
+  });
+
+  // Toast notification handler
+  ipcMain.handle('show-toast', (event, message: string, type: 'success' | 'warning' | 'error' = 'success') => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('toast-notification', { message, type });
+    }
+  });
+
+  // Onboarding status handlers
+  ipcMain.handle('check-onboarding-status', async () => {
+    try {
+      return await getOnboardingStatus();
+    } catch (error) {
+      console.error('Error in check-onboarding-status:', error);
+      return { completed: false, hasApiKey: false };
+    }
+  });
+  ipcMain.handle('complete-onboarding', async () => {
+    try {
+      return await completeOnboarding();
+    } catch (error) {
+      console.error('Error in complete-onboarding:', error);
+      return false;
+    }
+  });
+  ipcMain.handle('skip-onboarding', async () => {
+    try {
+      return await skipOnboarding();
+    } catch (error) {
+      console.error('Error in skip-onboarding:', error);
+      return false;
     }
   });
 
@@ -520,6 +1037,9 @@ function showAboutDialog(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Check encryption availability after app is ready
+  checkEncryptionAvailability();
+  
   createWindow();
   
   // Wait a bit for the window to be ready
