@@ -45,6 +45,23 @@ export default function Home() {
     checkOnboardingStatus()
   }, [])
 
+  // Load persisted transcriptions on mount
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (window.electronAPI?.loadTranscriptions) {
+          const items = await window.electronAPI.loadTranscriptions()
+          if (Array.isArray(items)) {
+            setTranscriptions(items as Transcription[])
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load transcriptions:', e)
+      }
+    }
+    load()
+  }, [])
+
   // Listen for new transcriptions from the active window
   useEffect(() => {
     if (window.electronAPI) {
@@ -85,7 +102,12 @@ export default function Home() {
   }
 
   const handleDeleteTranscription = (id: number) => {
-    setTranscriptions((prev) => prev.filter((t) => t.id !== id))
+    const next = transcriptions.filter((t) => t.id !== id)
+    setTranscriptions(next)
+    // Persist after delete
+    try {
+      window.electronAPI?.saveTranscriptions?.(next as any)
+    } catch {}
   }
 
   const handleTranscriptionClick = (id: number) => {
@@ -97,9 +119,12 @@ export default function Home() {
   }
 
   const handleTranscriptionUpdate = (id: number, newText: string) => {
-    setTranscriptions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, text: newText } : t))
-    )
+    const next = transcriptions.map((t) => (t.id === id ? { ...t, text: newText } : t))
+    setTranscriptions(next)
+    // Persist after edit
+    try {
+      window.electronAPI?.saveTranscriptions?.(next as any)
+    } catch {}
   }
 
   const addNewTranscription = async () => {

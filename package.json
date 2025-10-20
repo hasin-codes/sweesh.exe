@@ -11,7 +11,9 @@
     "build:main": "tsc src/main.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --skipLibCheck",
     "build:main:watch": "tsc src/main.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --skipLibCheck --watch",
     "clean": "rimraf dist",
-    "rebuild": "npm run clean && npm run build:main && npm run build"
+    "rebuild": "npm run clean && npm run build:main && npm run build",
+    "dist": "npm run rebuild && electron-builder -mwl",
+    "release": "npm run rebuild && electron-builder -mwl --publish always"
   },
   "keywords": [
     "electron",
@@ -31,7 +33,7 @@
     "copy-webpack-plugin": "^13.0.1",
     "css-loader": "^6.8.1",
     "electron": "^28.1.0",
-    "electron-packager": "^17.1.2",
+    "electron-builder": "^24.13.3",
     "html-webpack-plugin": "^5.6.0",
     "postcss": "^8.5.6",
     "postcss-loader": "^8.2.0",
@@ -51,11 +53,45 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
     "groq-sdk": "^0.33.0",
+    "electron-updater": "^6.3.9",
     "keytar": "^7.9.0",
     "lucide-react": "^0.546.0",
     "node-global-key-listener": "^0.3.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwind-merge": "^3.3.1"
+  },
+  "build": {
+    "appId": "com.sweesh.app",
+    "productName": "Sweesh",
+    "files": [
+      "dist/**",
+      "public/icons/**",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.productivity",
+      "icon": "public/icons/logo.icns",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist"
+    },
+    "win": {
+      "target": ["nsis", "zip"],
+      "icon": "public/icons/logo.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility",
+      "icon": "public/icons"
+    },
+    "publish": [
+      {
+        "provider": "github"
+      }
+    ]
   }
 }

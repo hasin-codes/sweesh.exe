@@ -57,14 +57,10 @@ let encryptionBackend = 'unknown';
 function checkEncryptionAvailability(): void {
   try {
     isEncryptionAvailable = safeStorage.isEncryptionAvailable();
-    let backend: string = 'unknown';
-    try {
-      const anySafe: any = safeStorage as unknown as any;
-      if (typeof anySafe.getSelectedStorageBackend === 'function') {
-        backend = anySafe.getSelectedStorageBackend();
-      }
-    } catch {}
-    encryptionBackend = backend;
+    encryptionBackend = safeStorage.getSelectedStorageBackend();
+    
+    console.log(`Encryption availability: ${isEncryptionAvailable}`);
+    console.log(`Encryption backend: ${encryptionBackend}`);
     
     if (!isEncryptionAvailable) {
       console.warn('OS-level encryption is not available. API keys will be stored with fallback encryption.');
@@ -242,76 +238,6 @@ function getApiKeyStatus(): { hasKey: boolean; maskedKey?: string } {
   }
 }
 
-// Onboarding state helpers
-async function getOnboardingStatus(): Promise<{ completed: boolean; hasApiKey: boolean }> {
-  try {
-    const userDataPath = app.getPath('userData');
-    const configPath = path.join(userDataPath, 'app-config.json');
-    
-    let completed = false;
-    let hasApiKey = false;
-    
-    if (fs.existsSync(configPath)) {
-      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      completed = configData.onboardingCompleted === true;
-    }
-    
-    try {
-      const apiKey = loadApiKeySecurely();
-      hasApiKey = !!apiKey;
-    } catch {
-      hasApiKey = false;
-    }
-    
-    return { completed, hasApiKey };
-  } catch (error) {
-    console.error('Error checking onboarding status:', error);
-    return { completed: false, hasApiKey: false };
-  }
-}
-
-async function completeOnboarding(): Promise<boolean> {
-  try {
-    const userDataPath = app.getPath('userData');
-    const configPath = path.join(userDataPath, 'app-config.json');
-    
-    let configData: any = {};
-    if (fs.existsSync(configPath)) {
-      configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    }
-    
-    configData.onboardingCompleted = true;
-    configData.completedAt = new Date().toISOString();
-    
-    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error completing onboarding:', error);
-    return false;
-  }
-}
-
-async function skipOnboarding(): Promise<boolean> {
-  try {
-    const userDataPath = app.getPath('userData');
-    const configPath = path.join(userDataPath, 'app-config.json');
-    
-    let configData: any = {};
-    if (fs.existsSync(configPath)) {
-      configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    }
-    
-    configData.onboardingSkipped = true;
-    configData.skippedAt = new Date().toISOString();
-    
-    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error skipping onboarding:', error);
-    return false;
-  }
-}
-
 // Initialize Groq client with secure storage
 let groq: Groq | null = null;
 
@@ -428,14 +354,6 @@ function createWindow(): void {
   // Handle opening active window
   ipcMain.handle('open-active-window', () => {
     createActiveWindow();
-    // After creation, when ready, send start-recording to mimic shortcut behavior
-    const tryStart = () => {
-      if (activeWindow && !activeWindow.isDestroyed()) {
-        activeWindow.webContents.send('start-recording');
-      }
-    };
-    // If window already exists and was just shown, trigger immediately after a short delay
-    setTimeout(tryStart, 150);
   });
 
   // Handle closing active window
@@ -619,14 +537,7 @@ function createWindow(): void {
   ipcMain.handle('get-encryption-status', () => {
     const platform = os.platform();
     const currentEncryptionAvailable = safeStorage.isEncryptionAvailable();
-    let currentBackend: string = 'unknown';
-    try {
-      // Some Electron versions may not expose getSelectedStorageBackend
-      const anySafe: any = safeStorage as unknown as any;
-      if (typeof anySafe.getSelectedStorageBackend === 'function') {
-        currentBackend = anySafe.getSelectedStorageBackend();
-      }
-    } catch {}
+    const currentBackend = safeStorage.getSelectedStorageBackend();
     
     let warningMessage = null;
     let setupInstructions = null;
@@ -662,32 +573,6 @@ function createWindow(): void {
   ipcMain.handle('show-toast', (event, message: string, type: 'success' | 'warning' | 'error' = 'success') => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('toast-notification', { message, type });
-    }
-  });
-
-  // Onboarding status handlers
-  ipcMain.handle('check-onboarding-status', async () => {
-    try {
-      return await getOnboardingStatus();
-    } catch (error) {
-      console.error('Error in check-onboarding-status:', error);
-      return { completed: false, hasApiKey: false };
-    }
-  });
-  ipcMain.handle('complete-onboarding', async () => {
-    try {
-      return await completeOnboarding();
-    } catch (error) {
-      console.error('Error in complete-onboarding:', error);
-      return false;
-    }
-  });
-  ipcMain.handle('skip-onboarding', async () => {
-    try {
-      return await skipOnboarding();
-    } catch (error) {
-      console.error('Error in skip-onboarding:', error);
-      return false;
     }
   });
 

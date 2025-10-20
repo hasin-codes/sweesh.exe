@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeToastListener: () => {
     ipcRenderer.removeAllListeners('toast-notification');
   },
+  // Persistence
+  loadTranscriptions: () => ipcRenderer.invoke('load-transcriptions'),
+  saveTranscriptions: (transcriptions: any[]) => ipcRenderer.invoke('save-transcriptions', transcriptions),
   // Onboarding management
   checkOnboardingStatus: () => ipcRenderer.invoke('check-onboarding-status'),
   completeOnboarding: () => ipcRenderer.invoke('complete-onboarding'),
