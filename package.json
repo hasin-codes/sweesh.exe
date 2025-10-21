@@ -1,7 +1,7 @@
 {
-  "name": "sweesh",
-  "version": "0.0.3",
-  "description": "React + Electron app with TypeScript",
+  "name": "Sweesh",
+  "version": "0.0.4",
+  "description": "Speak it, Send it",
   "main": "dist/main.js",
   "scripts": {
     "start": "electron .",
