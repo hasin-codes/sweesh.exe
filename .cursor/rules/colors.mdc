@@ -1,0 +1,242 @@
+# Sweesh Color Design System
+
+A comprehensive color palette and design system for the Sweesh voice transcription application, built with shadcn/ui, Tailwind CSS, and Next.js.
+
+## Description
+
+This design system defines the complete color palette, theme implementation, and usage guidelines for the Sweesh application. The system is built on shadcn/ui's neutral base color scheme with custom accent colors and is **dark-mode only** - there is no light mode implementation in this project.
+
+## Configuration
+
+```json
+{
+  "globs": [],
+  "alwaysApply": true
+}
+```
+
+## Core Color Palette
+
+### Primary Colors
+- **Primary Blue**: `#3b82f6` (hsl(217.2 91.2% 59.8%))
+  - Usage: Main brand color, primary buttons, links, focus states
+
+- **Primary Foreground**: `#f8fafc` (hsl(210 40% 98%))
+  - Usage: Text on primary backgrounds, button text
+
+### Background Colors
+- **Background**: `#0c0a09` (hsl(222.2 84% 4.9%))
+  - Usage: Main application background (dark mode only)
+
+- **Card Background**: `#0c0a09` (hsl(222.2 84% 4.9%))
+  - Usage: Card components, modal backgrounds (dark mode only)
+
+### Text Colors
+- **Foreground**: `#f8fafc` (hsl(210 40% 98%))
+  - Usage: Primary text, headings (dark mode only)
+
+- **Muted Foreground**: `#94a3b8` (hsl(215 20.2% 65.1%))
+  - Usage: Secondary text, descriptions, labels (dark mode only)
+
+### Interactive Colors
+- **Secondary**: `#1e293b` (hsl(217.2 32.6% 17.5%))
+  - Usage: Secondary buttons, subtle backgrounds (dark mode only)
+
+- **Accent**: `#1e293b` (hsl(217.2 32.6% 17.5%))
+  - Usage: Hover states, subtle highlights (dark mode only)
+
+- **Destructive**: `#7f1d1d` (hsl(0 62.8% 30.6%))
+  - Usage: Delete buttons, error states, destructive actions (dark mode only)
+
+### Border Colors
+- **Border**: `#1e293b` (hsl(217.2 32.6% 17.5%))
+  - Usage: Component borders, dividers (dark mode only)
+
+- **Input**: `#1e293b` (hsl(217.2 32.6% 17.5%))
+  - Usage: Input field borders, form elements (dark mode only)
+
+### Focus and Ring Colors
+- **Ring**: `#f1f5f9` (hsl(224.3 76.3% 94.1%))
+  - Usage: Focus indicators, keyboard navigation (dark mode only)
+
+## Special Brand Colors
+
+### Aurora Border Colors
+- **Purple**: `#a855f7` - Primary aurora color
+- **Blue**: `#3b82f6` - Secondary aurora color  
+- **Pink**: `#ec4899` - Tertiary aurora color
+- Usage: Animated border effects during recording
+
+### Recording Indicator Colors
+- **Recording Red**: `#dc2626` - Primary recording state
+- **Recording Orange**: `#ea580c` - Secondary recording state
+- **Recording Gradient**: `linear-gradient(to top, #dc2626, #ea580c)`
+- Usage: Voice recording indicators, audio level bars
+
+### Card Header Gradient
+- **Gradient Start**: `#c40000` - Deep red
+- **Gradient End**: `#ff4500` - Orange red
+- **Background Pattern**: Multiple radial gradients with white overlays
+- Usage: Transcription card headers, visual hierarchy
+
+## Theme Implementation
+
+### Dark Mode Only
+- **Single Theme**: This application only supports dark mode
+- **Hardcoded Dark**: The HTML element has `className="dark"` hardcoded in layout.tsx
+- **No Light Mode**: There is no light mode implementation or theme switching
+- **Dark Aesthetic**: Designed for reduced eye strain and modern appearance
+- **Brand Consistency**: Primary blue accent color on dark backgrounds
+
+### CSS Implementation
+- Uses CSS custom properties defined in `.dark` selector only
+- No light mode variables or theme switching logic
+- Fixed dark theme with no user preference detection
+- All components assume dark mode styling
+
+## Component-Specific Color Rules
+
+### Buttons
+- **Primary**: `bg-primary text-primary-foreground`
+- **Secondary**: `bg-secondary text-secondary-foreground`
+- **Destructive**: `bg-destructive text-destructive-foreground`
+- **Ghost**: `hover:bg-accent hover:text-accent-foreground`
+- **Outline**: `border bg-background hover:bg-accent`
+
+### Cards
+- **Background**: `bg-card text-card-foreground`
+- **Border**: `border-border`
+- **Hover**: Enhanced shadow with `hover:shadow-lg`
+- **Ring**: `ring-2 ring-black/20 dark:ring-white/10`
+
+### Inputs
+- **Background**: `bg-transparent`
+- **Border**: `border-input`
+- **Focus**: `focus-visible:border-ring focus-visible:ring-ring/50`
+- **Error**: `aria-invalid:border-destructive`
+
+### Modals
+- **Overlay**: `rgba(0, 0, 0, 0.5)`
+- **Content**: `bg-background border-border`
+- **Shadow**: `shadow-2xl`
+
+### Topbar
+- **Background**: `bg-background/95 backdrop-blur`
+- **Border**: `border-border`
+- **Position**: Fixed with backdrop blur
+
+## Accessibility Requirements
+
+### Contrast Ratios
+- **AA Compliance**: Minimum 4.5:1 for normal text
+- **AAA Compliance**: Minimum 7:1 for normal text
+- **Large Text**: Minimum 3:1 for large text (18pt+)
+
+### Focus Indicators
+- **Ring Color**: `hsl(var(--ring))`
+- **Ring Width**: `3px`
+- **Ring Opacity**: `50%`
+- **Outline**: `focus-visible:outline-none`
+
+### Color Blindness Support
+- Never rely solely on color to convey information
+- Use icons, patterns, or text alongside color
+- Ensure sufficient contrast for all color combinations
+- Test with color blindness simulators
+
+## Usage Guidelines
+
+### Primary Color Usage
+- Use primary blue for main actions and branding
+- Apply to buttons, links, and interactive elements
+- Maintain consistency across the application
+- Use sparingly to maintain visual hierarchy
+
+### Background Color Usage
+- Use main background for page layouts
+- Apply card background for content containers
+- Ensure proper contrast with text colors
+- Consider dark mode alternatives
+
+### Text Color Usage
+- Use foreground for primary text content
+- Apply muted foreground for secondary information
+- Ensure sufficient contrast ratios
+- Consider readability in both themes
+
+### Interactive State Colors
+- Use secondary for subtle interactions
+- Apply accent for hover states
+- Use destructive for dangerous actions
+- Provide clear visual feedback
+
+### Border Color Usage
+- Use border color for component outlines
+- Apply input color for form elements
+- Ensure visibility in both light and dark modes
+- Maintain consistency across components
+
+## Best Practices
+
+### Color Application
+1. **Consistency**: Use the same colors for the same purposes
+2. **Hierarchy**: Use color to establish visual hierarchy
+3. **Accessibility**: Ensure sufficient contrast ratios
+4. **Testing**: Test with color blindness simulators
+5. **Documentation**: Document color usage decisions
+
+### Dark Mode Considerations
+1. **Fixed Theme**: Application is hardcoded to dark mode only
+2. **No Theme Switching**: No user theme selection available
+3. **Consistent Styling**: All components use dark mode colors
+4. **No Transitions**: No theme change animations needed
+5. **Dark Optimized**: All colors optimized for dark backgrounds
+
+### Component Guidelines
+1. **Semantic Colors**: Use semantic color names
+2. **State Colors**: Define colors for all component states
+3. **Hover Effects**: Provide clear hover feedback
+4. **Focus States**: Ensure keyboard accessibility
+5. **Error States**: Use destructive color for errors
+
+## Implementation Notes
+
+### CSS Custom Properties
+All colors are defined as CSS custom properties in `globals.css` for dark mode only:
+```css
+:root {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 84% 4.9%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 224.3 76.3% 94.1%;
+  /* ... other dark mode properties */
+}
+```
+
+### Tailwind Integration
+Colors are used with Tailwind's HSL color system:
+```css
+background-color: hsl(var(--background));
+color: hsl(var(--foreground));
+```
+
+### Component Usage
+Components use semantic color classes:
+```tsx
+<Button className="bg-primary text-primary-foreground">
+  Primary Action
+</Button>
+```
+
+This color system ensures consistency, accessibility, and maintainability across the entire Sweesh application.

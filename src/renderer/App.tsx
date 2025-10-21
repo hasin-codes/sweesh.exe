@@ -33,8 +33,13 @@ export default function Home() {
       if (window.electronAPI) {
         try {
           const status = await window.electronAPI.checkOnboardingStatus()
-          if (!status.completed) {
+          console.log('Onboarding status:', status)
+          // Show onboarding if not completed OR if auth/API key is missing
+          if (!status.completed || !status.isAuthenticated || !status.hasApiKey) {
+            console.log('Showing onboarding modal')
             setShowOnboarding(true)
+          } else {
+            console.log('Onboarding already completed with auth and API key')
           }
         } catch (error) {
           console.error('Failed to check onboarding status:', error)

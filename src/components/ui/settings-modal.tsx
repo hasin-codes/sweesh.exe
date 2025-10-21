@@ -13,7 +13,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [saveMessage, setSaveMessage] = useState("")
   const [encryptionStatus, setEncryptionStatus] = useState<{ isEncryptionAvailable: boolean; encryptionBackend: string; platform: string; warningMessage?: string; setupInstructions?: { title: string; steps: string[] } }>({ isEncryptionAvailable: false, encryptionBackend: "", platform: "" })
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: "", type: 'success' })
-  const [onboardingStatus, setOnboardingStatus] = useState<{ completed: boolean; hasApiKey: boolean }>({ completed: false, hasApiKey: false })
+  const [onboardingStatus, setOnboardingStatus] = useState<{ completed: boolean; hasApiKey: boolean; isAuthenticated: boolean }>({ completed: false, hasApiKey: false, isAuthenticated: false })
   const [autoSave, setAutoSave] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [saveLocation, setSaveLocation] = useState("")

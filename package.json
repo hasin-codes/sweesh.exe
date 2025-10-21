@@ -1,6 +1,6 @@
 {
   "name": "sweesh",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "React + Electron app with TypeScript",
   "main": "dist/main.js",
   "scripts": {
@@ -28,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss7-compat": "^2.2.17",
     "@tailwindcss/typography": "^0.5.19",
+    "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.10.5",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -54,9 +55,11 @@
     "@radix-ui/react-slot": "^1.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2",
     "framer-motion": "^12.23.24",
     "groq-sdk": "^0.33.0",
-    "electron-updater": "^6.3.9",
+    "jsonwebtoken": "^9.0.2",
     "keytar": "^7.9.0",
     "lucide-react": "^0.546.0",
     "node-global-key-listener": "^0.3.0",
@@ -78,24 +81,35 @@
       "buildResources": "public"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.productivity",
       "icon": "public/icons/logo.icns",
       "hardenedRuntime": true,
       "entitlements": "entitlements.mac.plist"
     },
     "win": {
-      "target": ["nsis", "zip"],
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "icon": "public/icons/logo.ico"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility",
       "icon": "public/icons"
     },
     "publish": [
       {
-        "provider": "github"
+        "provider": "github",
+        "owner": "hasin-codes",
+        "repo": "sweesh.exe"
       }
     ]
   }

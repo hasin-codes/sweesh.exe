@@ -40,9 +40,23 @@ export interface ElectronAPI {
   loadTranscriptions: () => Promise<any[]>;
   saveTranscriptions: (transcriptions: any[]) => Promise<{success: boolean}>;
   // Onboarding management
-  checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean}>;
+  checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean, isAuthenticated: boolean}>;
   completeOnboarding: () => Promise<boolean>;
   skipOnboarding: () => Promise<boolean>;
+  clearAllData: () => Promise<{success: boolean, error?: string}>;
+  // Authentication methods
+  getAuthStatus: () => Promise<{isAuthenticated: boolean, user?: any}>;
+  startAuthFlow: () => Promise<{success: boolean, challenge?: string, uuid?: string, error?: string}>;
+  logout: () => Promise<{success: boolean, error?: string}>;
+  // Authentication event listeners
+  onAuthSuccess: (callback: (userData: any) => void) => void;
+  onAuthError: (callback: (error: string) => void) => void;
+  removeAuthListeners: () => void;
+  // Auto-Update methods
+  checkForUpdates: () => Promise<{success: boolean, updateInfo?: any, error?: string}>;
+  quitAndInstallUpdate: () => Promise<{success: boolean, error?: string}>;
+  onUpdateStatus: (callback: (data: {status: string, version?: string, error?: string, progress?: any}) => void) => void;
+  removeUpdateListener: () => void;
 }
 
 declare global {

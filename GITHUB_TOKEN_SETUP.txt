@@ -1,0 +1,85 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║                   GITHUB TOKEN SETUP - QUICK REFERENCE               ║
+║                        For Sweesh Auto-Updates                       ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+📋 STEP 1: CREATE GITHUB TOKEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Visit: https://github.com/settings/tokens/new
+
+2. Fill in:
+   ┌─────────────────────────────────────┐
+   │ Note: Sweesh Auto-Updater           │
+   │ Expiration: 90 days                 │
+   │ Scope: [✓] repo (check this box!)  │
+   └─────────────────────────────────────┘
+
+3. Click "Generate token"
+
+4. COPY THE TOKEN IMMEDIATELY! (You won't see it again)
+
+
+📋 STEP 2: SET ENVIRONMENT VARIABLE (Windows PowerShell)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Run this command (replace YOUR_TOKEN with actual token):
+
+[Environment]::SetEnvironmentVariable("GH_TOKEN", "YOUR_TOKEN", "User")
+
+⚠️  IMPORTANT: RESTART YOUR TERMINAL/IDE AFTER THIS!
+
+
+📋 STEP 3: VERIFY TOKEN IS SET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After restarting terminal, run:
+
+echo $env:GH_TOKEN
+
+✅ You should see your token displayed
+
+
+📋 STEP 4: BUILD & PUBLISH FIRST RELEASE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+npm run release
+
+
+📋 STEP 5: PUBLISH ON GITHUB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Go to: https://github.com/hasin-codes/sweesh.exe/releases
+2. Find draft release
+3. Click "Publish release"
+
+
+✅ DONE! Your app now auto-updates!
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ "Cannot publish - GH_TOKEN not set"
+   → Set the token and RESTART your terminal/IDE
+
+❌ Token verification shows nothing
+   → Make sure you restarted terminal after setting token
+
+❌ Build fails
+   → Run: npm run clean && npm run rebuild && npm run release
+
+❌ Updates not working
+   → Check logs: %APPDATA%\sweesh\logs\main.log
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔒 Keep your token secret - don't commit to git!
+📝 Token expires in 90 days - you'll need to regenerate
+🔄 Always increment version number before release
+📍 Logs location: %APPDATA%\sweesh\logs\main.log
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOR MORE DETAILS: See AUTO_UPDATE_SETUP.md
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+

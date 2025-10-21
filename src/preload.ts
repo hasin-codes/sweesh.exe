@@ -52,5 +52,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Onboarding management
   checkOnboardingStatus: () => ipcRenderer.invoke('check-onboarding-status'),
   completeOnboarding: () => ipcRenderer.invoke('complete-onboarding'),
-  skipOnboarding: () => ipcRenderer.invoke('skip-onboarding')
+  skipOnboarding: () => ipcRenderer.invoke('skip-onboarding'),
+  clearAllData: () => ipcRenderer.invoke('clear-all-data'),
+  // Authentication methods
+  getAuthStatus: () => ipcRenderer.invoke('get-auth-status'),
+  startAuthFlow: () => ipcRenderer.invoke('start-auth-flow'),
+  logout: () => ipcRenderer.invoke('logout'),
+  // Authentication event listeners
+  onAuthSuccess: (callback: (userData: any) => void) => {
+    ipcRenderer.on('auth-success', (event, userData) => callback(userData));
+  },
+  onAuthError: (callback: (error: string) => void) => {
+    ipcRenderer.on('auth-error', (event, error) => callback(error));
+  },
+  removeAuthListeners: () => {
+    ipcRenderer.removeAllListeners('auth-success');
+    ipcRenderer.removeAllListeners('auth-error');
+  },
+  // Auto-Update methods
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  quitAndInstallUpdate: () => ipcRenderer.invoke('quit-and-install-update'),
+  onUpdateStatus: (callback: (data: any) => void) => {
+    ipcRenderer.on('update-status', (event, data) => callback(data));
+  },
+  removeUpdateListener: () => {
+    ipcRenderer.removeAllListeners('update-status');
+  }
 });

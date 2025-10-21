@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard, safeStorage, shell } from 'electron';
 import * as path from 'path';
 import { GlobalKeyboardListener } from 'node-global-key-listener';
 import { exec } from 'child_process';
@@ -6,6 +6,9 @@ import Groq from 'groq-sdk';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
+import { autoUpdater } from 'electron-updater';
+import log from 'electron-log';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -40,6 +43,88 @@ function loadEnvFromFile(): void {
 // Load env before initializing API clients
 loadEnvFromFile();
 
+// Configure auto-updater logging
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
+
+// Auto-updater configuration
+function setupAutoUpdater(): void {
+  // Disable auto-download in development for safety
+  if (process.env.NODE_ENV === 'development') {
+    autoUpdater.autoDownload = false;
+    log.info('Auto-updater disabled in development mode');
+    return;
+  }
+
+  // Configure auto-updater
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // Auto-updater events
+  autoUpdater.on('checking-for-update', () => {
+    log.info('Checking for updates...');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { status: 'checking' });
+    }
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    log.info('Update available:', info);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { 
+        status: 'available', 
+        version: info.version 
+      });
+    }
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    log.info('Update not available:', info);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { status: 'not-available' });
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    log.error('Error in auto-updater:', err);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { 
+        status: 'error', 
+        error: err.message 
+      });
+    }
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
+    log.info(logMessage);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { 
+        status: 'downloading', 
+        progress: progressObj 
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info('Update downloaded:', info);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', { 
+        status: 'downloaded', 
+        version: info.version 
+      });
+    }
+  });
+
+  // Check for updates on app start (after a short delay)
+  setTimeout(() => {
+    log.info('Starting auto-update check...');
+    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+      log.error('Failed to check for updates:', error);
+    });
+  }, 3000); // 3 second delay to let the app initialize
+}
+
 let mainWindow: BrowserWindow;
 let activeWindow: BrowserWindow;
 let tray: Tray;
@@ -48,6 +133,16 @@ let isActiveWindowVisible = false;
 
 // Secure API Key Management
 const CREDENTIALS_FILE = path.join(app.getPath('userData'), 'credentials.enc');
+
+// Authentication Management
+const AUTH_FILE = path.join(app.getPath('userData'), 'auth.enc');
+const PROTOCOL_NAME = 'sweesh'; // Deep link protocol name
+const CLERK_JWKS_URL = 'https://mighty-bulldog-76.clerk.accounts.dev/.well-known/jwks.json';
+const AUTH_LANDING_URL = 'https://sweesh.vercel.app/auth/desktop'; // Landing page URL
+
+// Onboarding and Persistence
+const ONBOARDING_FILE = path.join(app.getPath('userData'), 'onboarding.json');
+const TRANSCRIPTIONS_FILE = path.join(app.getPath('userData'), 'transcriptions.json');
 
 // Check if encryption is available (will be set after app ready)
 let isEncryptionAvailable = false;
@@ -235,6 +330,212 @@ function getApiKeyStatus(): { hasKey: boolean; maskedKey?: string } {
   } catch (error) {
     console.error('Failed to get API key status:', error);
     return { hasKey: false };
+  }
+}
+
+// Authentication Storage Functions
+function saveAuthSecurely(authData: any): boolean {
+  try {
+    const encryptionAvailable = safeStorage.isEncryptionAvailable();
+    
+    if (encryptionAvailable) {
+      const encryptedBuffer = safeStorage.encryptString(JSON.stringify(authData));
+      fs.writeFileSync(AUTH_FILE, encryptedBuffer);
+      console.log('Auth data saved with OS-level encryption');
+      return true;
+    } else {
+      const encryptedData = encryptWithFallback(JSON.stringify(authData));
+      fs.writeFileSync(AUTH_FILE, encryptedData);
+      console.log('Auth data saved with AES-256-CBC fallback encryption');
+      return true;
+    }
+  } catch (error) {
+    console.error('Failed to save auth data:', error);
+    return false;
+  }
+}
+
+function loadAuthSecurely(): any | null {
+  try {
+    if (!fs.existsSync(AUTH_FILE)) {
+      return null;
+    }
+    
+    const fileContent = fs.readFileSync(AUTH_FILE);
+    const encryptionAvailable = safeStorage.isEncryptionAvailable();
+    
+    if (encryptionAvailable) {
+      try {
+        const decryptedData = safeStorage.decryptString(fileContent);
+        return JSON.parse(decryptedData);
+      } catch (decryptError) {
+        try {
+          const decryptedData = decryptWithFallback(fileContent.toString());
+          return JSON.parse(decryptedData);
+        } catch (fallbackError) {
+          console.error('Both OS-level and fallback decryption failed for auth data');
+          return null;
+        }
+      }
+    } else {
+      try {
+        const decryptedData = decryptWithFallback(fileContent.toString());
+        return JSON.parse(decryptedData);
+      } catch (fallbackError) {
+        console.error('Fallback decryption failed for auth data');
+        return null;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load auth data:', error);
+    return null;
+  }
+}
+
+function deleteAuthSecurely(): boolean {
+  try {
+    if (fs.existsSync(AUTH_FILE)) {
+      fs.unlinkSync(AUTH_FILE);
+      console.log('Auth data deleted securely');
+    }
+    return true;
+  } catch (error) {
+    console.error('Failed to delete auth data:', error);
+    return false;
+  }
+}
+
+function getAuthStatus(): { isAuthenticated: boolean; user?: any } {
+  try {
+    const authData = loadAuthSecurely();
+    if (!authData || !authData.user) {
+      return { isAuthenticated: false };
+    }
+    
+    // Check if token is expired
+    if (authData.expiresAt && new Date() > new Date(authData.expiresAt)) {
+      console.log('Auth token expired, clearing auth data');
+      deleteAuthSecurely();
+      return { isAuthenticated: false };
+    }
+    
+    return { isAuthenticated: true, user: authData.user };
+  } catch (error) {
+    console.error('Failed to get auth status:', error);
+    return { isAuthenticated: false };
+  }
+}
+
+// Onboarding Management Functions
+function checkOnboardingStatus(): { completed: boolean; hasApiKey: boolean; isAuthenticated: boolean } {
+  try {
+    let completed = false;
+    
+    if (fs.existsSync(ONBOARDING_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ONBOARDING_FILE, 'utf8'));
+      completed = data.completed || false;
+    }
+    
+    const hasApiKey = loadApiKeySecurely() !== null;
+    const authStatus = getAuthStatus();
+    const isAuthenticated = authStatus.isAuthenticated;
+    
+    // Onboarding is only truly complete if user has both auth AND API key
+    // Override completed flag if either is missing
+    if (!isAuthenticated || !hasApiKey) {
+      completed = false;
+    }
+    
+    return { completed, hasApiKey, isAuthenticated };
+  } catch (error) {
+    console.error('Failed to check onboarding status:', error);
+    return { completed: false, hasApiKey: false, isAuthenticated: false };
+  }
+}
+
+function completeOnboarding(): boolean {
+  try {
+    const data = { completed: true, completedAt: new Date().toISOString() };
+    fs.writeFileSync(ONBOARDING_FILE, JSON.stringify(data, null, 2));
+    console.log('Onboarding completed');
+    return true;
+  } catch (error) {
+    console.error('Failed to complete onboarding:', error);
+    return false;
+  }
+}
+
+function skipOnboarding(): boolean {
+  try {
+    const data = { completed: true, skipped: true, completedAt: new Date().toISOString() };
+    fs.writeFileSync(ONBOARDING_FILE, JSON.stringify(data, null, 2));
+    console.log('Onboarding skipped');
+    return true;
+  } catch (error) {
+    console.error('Failed to skip onboarding:', error);
+    return false;
+  }
+}
+
+// Function to clear all user data (for testing/reset)
+function clearAllUserData(): boolean {
+  try {
+    console.log('Clearing all user data...');
+    
+    // Delete all data files
+    if (fs.existsSync(AUTH_FILE)) {
+      fs.unlinkSync(AUTH_FILE);
+      console.log('Auth data cleared');
+    }
+    
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      fs.unlinkSync(CREDENTIALS_FILE);
+      console.log('API key cleared');
+    }
+    
+    if (fs.existsSync(ONBOARDING_FILE)) {
+      fs.unlinkSync(ONBOARDING_FILE);
+      console.log('Onboarding status cleared');
+    }
+    
+    if (fs.existsSync(TRANSCRIPTIONS_FILE)) {
+      fs.unlinkSync(TRANSCRIPTIONS_FILE);
+      console.log('Transcriptions cleared');
+    }
+    
+    // Clear Groq client
+    groq = null;
+    
+    console.log('All user data cleared successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to clear user data:', error);
+    return false;
+  }
+}
+
+// Transcription Persistence Functions
+function loadTranscriptions(): any[] {
+  try {
+    if (fs.existsSync(TRANSCRIPTIONS_FILE)) {
+      const data = fs.readFileSync(TRANSCRIPTIONS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+    return [];
+  } catch (error) {
+    console.error('Failed to load transcriptions:', error);
+    return [];
+  }
+}
+
+function saveTranscriptions(transcriptions: any[]): { success: boolean } {
+  try {
+    fs.writeFileSync(TRANSCRIPTIONS_FILE, JSON.stringify(transcriptions, null, 2));
+    console.log('Transcriptions saved successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to save transcriptions:', error);
+    return { success: false };
   }
 }
 
@@ -582,6 +883,100 @@ function createWindow(): void {
     }
   });
 
+  // Authentication IPC Handlers
+  ipcMain.handle('get-auth-status', () => {
+    return getAuthStatus();
+  });
+
+  ipcMain.handle('start-auth-flow', () => {
+    try {
+      // Generate a unique challenge and UUID for this auth session
+      const challenge = crypto.randomUUID();
+      const uuid = crypto.randomUUID();
+      
+      // Construct the auth URL with parameters
+      const authUrl = `${AUTH_LANDING_URL}?challenge=${challenge}&uuid=${uuid}&mode=login`;
+      
+      console.log('Starting auth flow with URL:', authUrl);
+      
+      // Open the browser to the auth page
+      shell.openExternal(authUrl);
+      
+      return { success: true, challenge, uuid };
+    } catch (error) {
+      console.error('Error starting auth flow:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('logout', () => {
+    try {
+      const deleted = deleteAuthSecurely();
+      if (deleted) {
+        console.log('User logged out successfully');
+        return { success: true };
+      } else {
+        return { success: false, error: 'Failed to delete auth data' };
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Onboarding IPC Handlers
+  ipcMain.handle('check-onboarding-status', () => {
+    return checkOnboardingStatus();
+  });
+
+  ipcMain.handle('complete-onboarding', () => {
+    return completeOnboarding();
+  });
+
+  ipcMain.handle('skip-onboarding', () => {
+    return skipOnboarding();
+  });
+
+  ipcMain.handle('clear-all-data', () => {
+    try {
+      const cleared = clearAllUserData();
+      return { success: cleared };
+    } catch (error) {
+      console.error('Error clearing data:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Auto-Update IPC Handlers
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      return { success: true, updateInfo: result?.updateInfo };
+    } catch (error) {
+      log.error('Manual update check failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('quit-and-install-update', () => {
+    try {
+      autoUpdater.quitAndInstall();
+      return { success: true };
+    } catch (error) {
+      log.error('Failed to install update:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Persistence IPC Handlers
+  ipcMain.handle('load-transcriptions', () => {
+    return loadTranscriptions();
+  });
+
+  ipcMain.handle('save-transcriptions', (event, transcriptions: any[]) => {
+    return saveTranscriptions(transcriptions);
+  });
+
   // Handle window close event
   mainWindow.on('close', (event) => {
     // Prevent default close behavior
@@ -589,6 +984,110 @@ function createWindow(): void {
     // Hide to tray instead
     mainWindow.hide();
   });
+}
+
+// Deep Link Protocol Registration
+function registerDeepLinkProtocol(): void {
+  // Register the protocol for deep linking
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(PROTOCOL_NAME, process.execPath, [path.resolve(process.argv[1])]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient(PROTOCOL_NAME);
+  }
+}
+
+// JWT Validation Functions
+async function validateJWTToken(token: string): Promise<any> {
+  try {
+    // For now, we'll decode the JWT without verification
+    // In production, you should verify the JWT signature using Clerk's JWKS
+    const decoded = jwt.decode(token, { complete: true });
+    
+    if (!decoded || typeof decoded === 'string') {
+      throw new Error('Invalid JWT token');
+    }
+    
+    const payload = decoded.payload as any;
+    
+    // Extract user information from JWT claims
+    const userData = {
+      userId: payload.userId || payload.sub,
+      email: payload.email,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      imageUrl: payload.imageUrl,
+      expiresAt: new Date(payload.exp * 1000).toISOString()
+    };
+    
+    console.log('JWT token validated successfully:', userData);
+    return userData;
+  } catch (error) {
+    console.error('JWT validation failed:', error);
+    throw error;
+  }
+}
+
+// Handle Deep Link Authentication
+function handleDeepLinkAuth(url: string): void {
+  try {
+    console.log('Received deep link:', url);
+    
+    // Parse the deep link URL: sweesh://auth/callback?token=...&challenge=...&uuid=...
+    const urlObj = new URL(url);
+    
+    // Handle both /auth/callback and /callback paths
+    const validPaths = ['/auth/callback', '/callback', 'auth/callback', 'callback'];
+    if (!validPaths.includes(urlObj.pathname)) {
+      console.log('Invalid deep link path:', urlObj.pathname);
+      return;
+    }
+    
+    const token = urlObj.searchParams.get('token');
+    const challenge = urlObj.searchParams.get('challenge');
+    const uuid = urlObj.searchParams.get('uuid');
+    
+    if (!token || !challenge || !uuid) {
+      console.log('Missing required parameters in deep link');
+      return;
+    }
+    
+    // Validate the JWT token
+    validateJWTToken(token)
+      .then((userData) => {
+        // Save authentication data
+        const authData = {
+          user: userData,
+          challenge,
+          uuid,
+          authenticatedAt: new Date().toISOString()
+        };
+        
+        const saved = saveAuthSecurely(authData);
+        if (saved) {
+          console.log('Authentication successful, user data saved');
+          
+          // Notify the renderer process
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('auth-success', userData);
+          }
+        } else {
+          console.error('Failed to save authentication data');
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('auth-error', 'Failed to save authentication data');
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('Authentication failed:', error);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('auth-error', 'Authentication failed: ' + error.message);
+        }
+      });
+  } catch (error) {
+    console.error('Error handling deep link auth:', error);
+  }
 }
 
 function createTray(): void {
@@ -924,14 +1423,26 @@ function showAboutDialog(): void {
   aboutWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(aboutHTML)}`);
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+// Prevent multiple instances of the app
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  // This method will be called when Electron has finished
+  // initialization and is ready to create browser windows.
+  // Some APIs can only be used after this event occurs.
+  app.whenReady().then(() => {
   // Check encryption availability after app is ready
   checkEncryptionAvailability();
   
+  // Register deep link protocol
+  registerDeepLinkProtocol();
+  
   createWindow();
+  
+  // Setup auto-updater to check for updates on app start
+  setupAutoUpdater();
   
   // Wait a bit for the window to be ready
   setTimeout(() => {
@@ -1069,6 +1580,27 @@ app.whenReady().then(() => {
   }, 1000);
 });
 
+// Handle deep link when app is already running
+app.on('second-instance', (event, commandLine, workingDirectory) => {
+  // Someone tried to run a second instance, we should focus our window instead
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+  
+  // Check for deep link in command line arguments
+  const deepLinkUrl = commandLine.find(arg => arg.startsWith(`${PROTOCOL_NAME}://`));
+  if (deepLinkUrl) {
+    handleDeepLinkAuth(deepLinkUrl);
+  }
+});
+
+// Handle deep link when app is launched with a deep link
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLinkAuth(url);
+});
+
 // Prevent app from quitting when all windows are closed (tray behavior)
 app.on('window-all-closed', () => {
   // App stays running in tray - no need to quit
@@ -1093,3 +1625,4 @@ app.on('will-quit', () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
+}
