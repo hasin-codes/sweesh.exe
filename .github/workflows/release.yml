@@ -4,15 +4,17 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
   build:
+    name: Build and Release on ${{ matrix.os }}
     permissions:
       contents: write
     runs-on: ${{ matrix.os }}
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    timeout-minutes: 60  # Prevent jobs from running indefinitely
     strategy:
+      fail-fast: false  # Continue building other platforms if one fails
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
@@ -25,22 +27,70 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+        timeout-minutes: 5
+
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev
 
       - name: Install dependencies
+        timeout-minutes: 10
         run: npm ci
+      
+      - name: Debug - Show environment (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          node --version
+          npm --version
+          echo "GH_TOKEN is set: ${{ secrets.GH_TOKEN != '' }}"
+          echo "Current directory: $(pwd)"
+          ls -la
+      
+      - name: Debug - Show environment (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          node --version
+          npm --version
+          Write-Host "GH_TOKEN is set: ${{ secrets.GH_TOKEN != '' }}"
+          Write-Host "Current directory: $(Get-Location)"
+          Get-ChildItem
 
       - name: Build app
+        timeout-minutes: 15
         run: npm run rebuild
 
       - name: Package and publish (Linux)
         if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder -l --publish always
 
       - name: Package and publish (Windows)
         if: matrix.os == 'windows-latest'
+        timeout-minutes: 20
         shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder -w --publish always
 
       - name: Package and publish (macOS)
         if: matrix.os == 'macos-latest'
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder -m --publish always
+      
+      - name: Upload build artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.os }}
+          path: |
+            dist/
+            *.log
+          retention-days: 5
