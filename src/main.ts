@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard, safeStorage, shell } from 'electron';
 import * as path from 'path';
 import { GlobalKeyboardListener } from 'node-global-key-listener';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import Groq from 'groq-sdk';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -9,6 +9,7 @@ import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import jwksClient from 'jwks-rsa';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -182,34 +183,37 @@ function checkEncryptionAvailability(): void {
 }
 
 // Generate a machine-specific encryption key for fallback
-function generateMachineKey(): string {
+function generateMachineKey(): Buffer {
   try {
     // Use machine-specific identifiers to create a consistent key
     const machineId = os.hostname() + os.platform() + os.arch();
-    const hash = crypto.createHash('sha256').update(machineId).digest('hex');
-    return hash.substring(0, 32); // Use first 32 characters as key
+    // Generate a 32-byte (256-bit) key for AES-256
+    const hash = crypto.createHash('sha256').update(machineId).digest();
+    return hash; // Returns 32 bytes Buffer
   } catch (error) {
     console.error('Error generating machine key:', error);
-    // Fallback to a default key (less secure but functional)
-    return 'default-fallback-key-32-chars';
+    // Fallback to a default key derived from a known string (less secure but functional)
+    return crypto.createHash('sha256').update('default-fallback-key-for-sweesh-app').digest();
   }
 }
 
-// Secure fallback encryption using AES-256-CBC
+// Secure fallback encryption using AES-256-CBC with proper IV handling
 function encryptWithFallback(text: string): string {
   try {
-    const key = generateMachineKey();
-    const iv = crypto.randomBytes(16); // Generate random IV
-    const cipher = crypto.createCipher('aes-256-cbc', key);
+    const key = generateMachineKey(); // 32 bytes for AES-256
+    const iv = crypto.randomBytes(16); // 16 bytes IV for AES
+    
+    // Use createCipheriv (secure) instead of createCipher (deprecated)
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
     
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     
-    // Combine IV and encrypted data
+    // Store IV with encrypted data (IV doesn't need to be secret)
     const result = {
       iv: iv.toString('hex'),
       encrypted: encrypted,
-      method: 'fallback-crypto'
+      method: 'aes-256-cbc-secure'
     };
     
     return JSON.stringify(result);
@@ -219,13 +223,17 @@ function encryptWithFallback(text: string): string {
   }
 }
 
-// Secure fallback decryption using AES-256-CBC
+// Secure fallback decryption using AES-256-CBC with proper IV handling
 function decryptWithFallback(encryptedData: string): string {
   try {
     const data = JSON.parse(encryptedData);
-    const key = generateMachineKey();
+    const key = generateMachineKey(); // 32 bytes for AES-256
     
-    const decipher = crypto.createDecipher('aes-256-cbc', key);
+    // Extract IV from the encrypted data
+    const iv = Buffer.from(data.iv, 'hex');
+    
+    // Use createDecipheriv (secure) instead of createDecipher (deprecated)
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
     
     let decrypted = decipher.update(data.encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
@@ -284,25 +292,25 @@ function loadApiKeySecurely(): string | null {
         return decryptedKey;
       } catch (decryptError) {
         // If decryption fails, try crypto fallback
-        console.warn('OS-level decryption failed, trying AES-256-GCM fallback');
+        console.warn('OS-level decryption failed, trying AES-256-CBC fallback');
         try {
           const decryptedKey = decryptWithFallback(fileContent.toString());
-          console.log('API key loaded with AES-256-GCM fallback');
+          console.log('API key loaded with AES-256-CBC fallback');
           return decryptedKey;
         } catch (fallbackError) {
-          console.error('Both OS-level and AES-256-GCM fallback decryption failed');
+          console.error('Both OS-level and AES-256-CBC fallback decryption failed');
           return null;
         }
       }
     } else {
       // Use crypto fallback
-      console.warn('OS-level encryption not available, using AES-256-GCM fallback');
+      console.warn('OS-level encryption not available, using AES-256-CBC fallback');
       try {
         const decryptedKey = decryptWithFallback(fileContent.toString());
-        console.log('API key loaded with AES-256-GCM fallback');
+        console.log('API key loaded with AES-256-CBC fallback');
         return decryptedKey;
       } catch (fallbackError) {
-        console.error('AES-256-GCM fallback decryption failed');
+        console.error('AES-256-CBC fallback decryption failed');
         return null;
       }
     }
@@ -648,16 +656,54 @@ function createWindow(): void {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      // Enable sandbox for extra security
+      sandbox: true,
     },
+  });
+
+  // Set Content Security Policy headers
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'", // unsafe-inline needed for React
+            "style-src 'self' 'unsafe-inline'",  // unsafe-inline needed for styled components
+            "img-src 'self' data: https:",
+            "font-src 'self' data:",
+            "connect-src 'self' https://api.groq.com https://mighty-bulldog-76.clerk.accounts.dev",
+            "media-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "upgrade-insecure-requests"
+          ].join('; ')
+        ]
+      }
+    });
   });
 
   // and load the index.html of the app.
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadFile(path.join(__dirname, 'index.html'));
-    // Open the DevTools in development mode
-    mainWindow.webContents.openDevTools();
+    // Only open DevTools in development AND not in production build
+    // Extra safety: check if app is packaged
+    if (!app.isPackaged) {
+      mainWindow.webContents.openDevTools();
+      console.log('DevTools enabled (development mode, unpacked app)');
+    } else {
+      console.warn('DevTools disabled (app is packaged)');
+    }
   } else {
     mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    // Ensure DevTools is never accessible in production
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow.webContents.closeDevTools();
+      console.warn('DevTools blocked in production mode');
+    });
   }
 
   // Create system tray
@@ -827,7 +873,7 @@ function createWindow(): void {
         });
       } else {
         mainWindow?.webContents.send('toast-notification', {
-          message: 'OS-level encryption not available. Using AES-256-GCM fallback.',
+          message: 'OS-level encryption not available. Using AES-256-CBC fallback.',
           type: 'warning'
         });
       }
@@ -920,7 +966,7 @@ function createWindow(): void {
     
     if (!currentEncryptionAvailable) {
       if (platform === 'linux') {
-        warningMessage = 'OS-level encryption is not available. API keys will be stored with AES-256-GCM fallback.';
+        warningMessage = 'OS-level encryption is not available. API keys will be stored with AES-256-CBC fallback.';
         setupInstructions = {
           title: 'Linux Setup Instructions',
           steps: [
@@ -932,7 +978,7 @@ function createWindow(): void {
           ]
         };
       } else {
-        warningMessage = 'OS-level encryption is not available. API keys will be stored with AES-256-GCM fallback.';
+        warningMessage = 'OS-level encryption is not available. API keys will be stored with AES-256-CBC fallback.';
       }
     }
     
@@ -967,6 +1013,12 @@ function createWindow(): void {
       const authUrl = `${AUTH_LANDING_URL}?challenge=${challenge}&uuid=${uuid}&mode=login`;
       
       console.log('Starting auth flow with URL:', authUrl);
+      
+      // Validate URL before opening (security check)
+      if (!validateExternalUrl(authUrl, AUTH_LANDING_URL)) {
+        console.error('URL validation failed for auth flow');
+        return { success: false, error: 'Invalid authentication URL' };
+      }
       
       // Open the browser to the auth page
       shell.openExternal(authUrl);
@@ -1067,20 +1119,122 @@ function registerDeepLinkProtocol(): void {
   }
 }
 
-// JWT Validation Functions
+// URL validation function to prevent malicious URL manipulation
+function validateExternalUrl(urlToValidate: string, expectedBaseUrl: string): boolean {
+  try {
+    const parsedUrl = new URL(urlToValidate);
+    const parsedBaseUrl = new URL(expectedBaseUrl);
+    
+    // Check protocol (only allow https)
+    if (parsedUrl.protocol !== 'https:') {
+      console.warn('Invalid protocol detected:', parsedUrl.protocol);
+      return false;
+    }
+    
+    // Check that the origin matches the expected base URL
+    if (parsedUrl.origin !== parsedBaseUrl.origin) {
+      console.warn('Origin mismatch. Expected:', parsedBaseUrl.origin, 'Got:', parsedUrl.origin);
+      return false;
+    }
+    
+    // Check that the pathname starts with the expected base path
+    if (!parsedUrl.pathname.startsWith(parsedBaseUrl.pathname)) {
+      console.warn('Path mismatch. Expected path to start with:', parsedBaseUrl.pathname, 'Got:', parsedUrl.pathname);
+      return false;
+    }
+    
+    // Additional check: ensure no unusual characters in the URL
+    const dangerousPatterns = [
+      /<script/i,
+      /javascript:/i,
+      /data:/i,
+      /vbscript:/i,
+      /<iframe/i
+    ];
+    
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(urlToValidate)) {
+        console.warn('Dangerous pattern detected in URL:', pattern);
+        return false;
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('URL validation error:', error);
+    return false;
+  }
+}
+
+// Initialize JWKS client for JWT verification
+const jwksClientInstance = jwksClient({
+  jwksUri: CLERK_JWKS_URL,
+  cache: true,
+  cacheMaxAge: 600000, // 10 minutes
+  rateLimit: true,
+  jwksRequestsPerMinute: 10
+});
+
+// Helper function to get signing key from JWKS
+function getSigningKey(header: jwt.JwtHeader, callback: jwt.SigningKeyCallback): void {
+  jwksClientInstance.getSigningKey(header.kid, (err, key) => {
+    if (err) {
+      callback(err);
+      return;
+    }
+    const signingKey = key?.getPublicKey();
+    callback(null, signingKey);
+  });
+}
+
+// JWT Validation Functions with proper signature verification
 async function validateJWTToken(token: string): Promise<any> {
   try {
-    // For now, we'll decode the JWT without verification
-    // In production, you should verify the JWT signature using Clerk's JWKS
+    console.log('Starting JWT validation with signature verification...');
+    
+    // First decode to check structure (without verification)
     const decoded = jwt.decode(token, { complete: true });
     
     if (!decoded || typeof decoded === 'string') {
-      throw new Error('Invalid JWT token');
+      throw new Error('Invalid JWT token format');
     }
     
-    const payload = decoded.payload as any;
+    if (!decoded.header.kid) {
+      throw new Error('JWT token missing kid (key ID) in header');
+    }
     
-    // Extract user information from JWT claims
+    // Verify the JWT signature using Clerk's JWKS
+    const verified = await new Promise<any>((resolve, reject) => {
+      jwt.verify(
+        token,
+        getSigningKey,
+        {
+          algorithms: ['RS256'], // Clerk uses RS256 algorithm
+          complete: false
+        },
+        (err, decoded) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(decoded);
+          }
+        }
+      );
+    });
+    
+    const payload = verified as any;
+    
+    // Validate token expiration
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      throw new Error('JWT token has expired');
+    }
+    
+    // Validate token not-before time
+    if (payload.nbf && Date.now() < payload.nbf * 1000) {
+      throw new Error('JWT token not yet valid');
+    }
+    
+    // Extract user information from verified JWT claims
     const userData = {
       userId: payload.userId || payload.sub,
       email: payload.email,
@@ -1090,10 +1244,13 @@ async function validateJWTToken(token: string): Promise<any> {
       expiresAt: new Date(payload.exp * 1000).toISOString()
     };
     
-    console.log('JWT token validated successfully:', userData);
+    console.log('JWT token verified and validated successfully');
     return userData;
   } catch (error) {
     console.error('JWT validation failed:', error);
+    if (error instanceof Error) {
+      throw new Error(`JWT validation failed: ${error.message}`);
+    }
     throw error;
   }
 }
@@ -1226,6 +1383,8 @@ function createActiveWindow(): void {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      // Enable sandbox for extra security
+      sandbox: true,
     },
     // No parent property - this makes it a separate independent window
     modal: false, // Not modal so both windows can be used
@@ -1234,13 +1393,47 @@ function createActiveWindow(): void {
     alwaysOnTop: true, // Always on top
   });
 
+  // Set Content Security Policy headers for active window
+  activeWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self' data:",
+            "connect-src 'self' https://api.groq.com",
+            "media-src 'self' blob:",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'none'",
+            "frame-ancestors 'none'"
+          ].join('; ')
+        ]
+      }
+    });
+  });
+
   // Load the active HTML file
   if (process.env.NODE_ENV === 'development') {
     activeWindow.loadFile(path.join(__dirname, 'active.html'));
-    // Open DevTools for active window in development
-    activeWindow.webContents.openDevTools();
+    // Only open DevTools in development AND not in production build
+    if (!app.isPackaged) {
+      activeWindow.webContents.openDevTools();
+      console.log('Active window DevTools enabled (development mode, unpacked app)');
+    } else {
+      console.warn('Active window DevTools disabled (app is packaged)');
+    }
   } else {
     activeWindow.loadFile(path.join(__dirname, 'active.html'));
+    // Ensure DevTools is never accessible in production
+    activeWindow.webContents.on('devtools-opened', () => {
+      activeWindow.webContents.closeDevTools();
+      console.warn('Active window DevTools blocked in production mode');
+    });
   }
 
   // Show active window when ready
@@ -1278,54 +1471,35 @@ function createActiveWindow(): void {
   });
 }
 
-// Function to toggle startup on boot
+// Helper function to escape shell arguments (defense in depth)
+function escapeShellArg(arg: string): string {
+  // Replace any potentially dangerous characters
+  // This is a defense-in-depth measure alongside using execFile
+  return arg.replace(/["'`$\\]/g, '\\$&');
+}
+
+// Function to toggle startup on boot (secure implementation)
 function toggleStartup(enabled: boolean): void {
   const appName = 'Sweesh';
   const appPath = process.execPath;
   
   if (process.platform === 'win32') {
-    const regKey = `HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`;
-    const command = enabled 
-      ? `reg add "${regKey}" /v "${appName}" /t REG_SZ /d "${appPath}" /f`
-      : `reg delete "${regKey}" /v "${appName}" /f`;
-    
-    exec(command, (error) => {
-      if (error) {
-        console.log('Failed to toggle startup:', error);
-      } else {
-        console.log(`Startup ${enabled ? 'enabled' : 'disabled'}`);
-        updateTrayMenu();
-      }
-    });
-  } else if (process.platform === 'darwin') {
-    // macOS implementation
-    const command = enabled
-      ? `osascript -e 'tell application "System Events" to make login item at end with properties {path:"${appPath}", hidden:false}'`
-      : `osascript -e 'tell application "System Events" to delete login item "Sweesh"'`;
-    
-    exec(command, (error) => {
-      if (error) {
-        console.log('Failed to toggle startup:', error);
-      } else {
-        console.log(`Startup ${enabled ? 'enabled' : 'disabled'}`);
-        updateTrayMenu();
-      }
-    });
-  } else {
-    // Linux implementation
-    const autostartDir = `${process.env.HOME}/.config/autostart`;
-    const desktopFile = `${autostartDir}/sweesh.desktop`;
+    // Windows: Use execFile with argument array to prevent command injection
+    const regKey = 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
     
     if (enabled) {
-      const desktopContent = `[Desktop Entry]
-Type=Application
-Name=Sweesh
-Exec=${appPath}
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true`;
-      
-      exec(`mkdir -p "${autostartDir}" && echo '${desktopContent}' > "${desktopFile}"`, (error) => {
+      // Use execFile with separate arguments (no string interpolation)
+      execFile('reg', [
+        'add',
+        regKey,
+        '/v',
+        appName,
+        '/t',
+        'REG_SZ',
+        '/d',
+        appPath,
+        '/f'
+      ], (error) => {
         if (error) {
           console.log('Failed to enable startup:', error);
         } else {
@@ -1334,7 +1508,14 @@ X-GNOME-Autostart-enabled=true`;
         }
       });
     } else {
-      exec(`rm -f "${desktopFile}"`, (error) => {
+      // Use execFile with separate arguments
+      execFile('reg', [
+        'delete',
+        regKey,
+        '/v',
+        appName,
+        '/f'
+      ], (error) => {
         if (error) {
           console.log('Failed to disable startup:', error);
         } else {
@@ -1343,31 +1524,96 @@ X-GNOME-Autostart-enabled=true`;
         }
       });
     }
+  } else if (process.platform === 'darwin') {
+    // macOS: Use execFile with proper escaping for AppleScript
+    if (enabled) {
+      // Escape single quotes in path for AppleScript
+      const escapedPath = appPath.replace(/'/g, "'\\''");
+      const script = `tell application "System Events" to make login item at end with properties {path:"${escapedPath}", hidden:false}`;
+      
+      execFile('osascript', ['-e', script], (error) => {
+        if (error) {
+          console.log('Failed to enable startup:', error);
+        } else {
+          console.log('Startup enabled');
+          updateTrayMenu();
+        }
+      });
+    } else {
+      const script = `tell application "System Events" to delete login item "Sweesh"`;
+      
+      execFile('osascript', ['-e', script], (error) => {
+        if (error) {
+          console.log('Failed to disable startup:', error);
+        } else {
+          console.log('Startup disabled');
+          updateTrayMenu();
+        }
+      });
+    }
+  } else {
+    // Linux: Use fs.writeFileSync instead of shell commands (most secure)
+    const autostartDir = path.join(process.env.HOME || os.homedir(), '.config', 'autostart');
+    const desktopFile = path.join(autostartDir, 'sweesh.desktop');
+    
+    try {
+      if (enabled) {
+        // Create directory if it doesn't exist (synchronous for safety)
+        if (!fs.existsSync(autostartDir)) {
+          fs.mkdirSync(autostartDir, { recursive: true });
+        }
+        
+        // Write desktop file directly using fs (no shell command)
+        const desktopContent = `[Desktop Entry]
+Type=Application
+Name=Sweesh
+Exec=${appPath}
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true`;
+        
+        fs.writeFileSync(desktopFile, desktopContent, { mode: 0o644 });
+        console.log('Startup enabled');
+        updateTrayMenu();
+      } else {
+        // Delete file directly using fs (no shell command)
+        if (fs.existsSync(desktopFile)) {
+          fs.unlinkSync(desktopFile);
+        }
+        console.log('Startup disabled');
+        updateTrayMenu();
+      }
+    } catch (error) {
+      console.log('Failed to toggle startup:', error);
+    }
   }
 }
 
-// Function to check startup status
+// Function to check startup status (secure implementation)
 function checkStartupStatus(): void {
   const appName = 'Sweesh';
   
   if (process.platform === 'win32') {
-    const regKey = `HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`;
-    exec(`reg query "${regKey}" /v "${appName}"`, (error) => {
+    // Windows: Use execFile with argument array
+    const regKey = 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+    
+    execFile('reg', ['query', regKey, '/v', appName], (error) => {
       const isEnabled = !error;
       updateTrayMenu(isEnabled);
     });
   } else if (process.platform === 'darwin') {
-    exec(`osascript -e 'tell application "System Events" to get the name of every login item'`, (error, stdout) => {
+    // macOS: Use execFile for osascript
+    const script = 'tell application "System Events" to get the name of every login item';
+    
+    execFile('osascript', ['-e', script], (error, stdout) => {
       const isEnabled = !error && stdout.includes('Sweesh');
       updateTrayMenu(isEnabled);
     });
   } else {
-    // Linux
-    const desktopFile = `${process.env.HOME}/.config/autostart/sweesh.desktop`;
-    exec(`test -f "${desktopFile}"`, (error) => {
-      const isEnabled = !error;
-      updateTrayMenu(isEnabled);
-    });
+    // Linux: Use fs.existsSync instead of shell command (most secure)
+    const desktopFile = path.join(process.env.HOME || os.homedir(), '.config', 'autostart', 'sweesh.desktop');
+    const isEnabled = fs.existsSync(desktopFile);
+    updateTrayMenu(isEnabled);
   }
 }
 
@@ -1417,8 +1663,8 @@ function updateTrayMenu(isStartupEnabled?: boolean): void {
 // Function to show about dialog
 function showAboutDialog(): void {
   const aboutWindow = new BrowserWindow({
-    width: 400,
-    height: 300,
+    width: 450,
+    height: 400,
     resizable: false,
     modal: true,
     parent: mainWindow,
@@ -1427,6 +1673,10 @@ function showAboutDialog(): void {
       contextIsolation: true,
     },
   });
+
+  // Get logo path
+  const logoPath = path.join(__dirname, 'icons', 'logo.png');
+  const logoUrl = `file://${logoPath.replace(/\\/g, '/')}`;
 
   const aboutHTML = `
     <!DOCTYPE html>
@@ -1437,53 +1687,107 @@ function showAboutDialog(): void {
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           margin: 0;
-          padding: 20px;
-          background: #1a1a1a;
+          padding: 30px 20px;
+          background: #0a0a0a;
           color: white;
           text-align: center;
         }
-        .logo {
-          width: 64px;
-          height: 64px;
+        .logo-container {
           margin: 0 auto 20px;
-          background: #ff6b35;
-          border-radius: 12px;
+          width: 80px;
+          height: 80px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 24px;
-          font-weight: bold;
+        }
+        .logo {
+          width: 80px;
+          height: 80px;
+          object-fit: contain;
+          border-radius: 16px;
         }
         h1 {
-          margin: 0 0 10px;
+          margin: 0 0 5px;
           color: #ff6b35;
+          font-size: 28px;
+          font-weight: 600;
+        }
+        .tagline {
+          margin: 0 0 20px;
+          color: #888;
+          font-size: 14px;
+          font-style: italic;
         }
         p {
-          margin: 10px 0;
+          margin: 8px 0;
           color: #ccc;
+          font-size: 14px;
+          line-height: 1.5;
         }
         .version {
-          font-size: 14px;
+          font-size: 13px;
           color: #888;
+          margin: 15px 0;
+          padding: 8px 16px;
+          background: #1a1a1a;
+          border-radius: 6px;
+          display: inline-block;
+        }
+        .features {
+          margin: 20px 0;
+          padding: 15px;
+          background: #141414;
+          border-radius: 8px;
+          text-align: left;
+        }
+        .features ul {
+          margin: 10px 0;
+          padding-left: 20px;
+          color: #aaa;
+          font-size: 13px;
+        }
+        .features li {
+          margin: 5px 0;
         }
         .close-btn {
           margin-top: 20px;
-          padding: 8px 16px;
+          padding: 10px 24px;
           background: #ff6b35;
           color: white;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: background 0.2s;
+        }
+        .close-btn:hover {
+          background: #ff8555;
+        }
+        .footer {
+          margin-top: 20px;
+          font-size: 12px;
+          color: #666;
         }
       </style>
     </head>
     <body>
-      <div class="logo">S</div>
+      <div class="logo-container">
+        <img src="${logoUrl}" alt="Sweesh Logo" class="logo">
+      </div>
       <h1>Sweesh</h1>
-      <p>Voice Transcription Desktop App</p>
-      <p class="version">Version 1.0.0</p>
-      <p>Professional voice transcription made simple</p>
-      <p>Hold Ctrl+Shift+M, Alt+Shift+M, or F12 to activate voice widget</p>
+      <p class="tagline">Speak it, Send it</p>
+      <p class="version">Version 1.1.0</p>
+      <div class="features">
+        <p><strong>Quick Shortcuts:</strong></p>
+        <ul>
+          <li>Hold <strong>Ctrl+Shift+M</strong> to record</li>
+          <li>Hold <strong>Alt+Shift+M</strong> to record</li>
+          <li>Hold <strong>F12</strong> to record</li>
+        </ul>
+      </div>
+      <p>Professional voice transcription powered by Groq Whisper</p>
+      <p class="footer">© 2025 Sweesh. Made with ❤️ by Hasin Raiyan</p>
       <button class="close-btn" onclick="window.close()">Close</button>
     </body>
     </html>

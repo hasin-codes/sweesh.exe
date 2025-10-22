@@ -1,6 +1,6 @@
 {
   "name": "Sweesh",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "Speak it, Send it",
   "main": "dist/main.js",
   "scripts": {
@@ -71,6 +71,7 @@
     "isarray": "^1.0.0",
     "jsonfile": "^6.2.0",
     "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.2.0",
     "keytar": "^7.9.0",
     "lazystream": "^1.0.1",
     "lodash.defaults": "^4.2.0",
@@ -95,6 +96,7 @@
   "build": {
     "appId": "com.sweesh.app",
     "productName": "Sweesh",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "files": [
       "dist/**",
       "public/icons/**",
@@ -120,7 +122,8 @@
         "nsis",
         "zip"
       ],
-      "icon": "public/icons/logo.ico"
+      "icon": "public/icons/logo.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "linux": {
       "target": [
