@@ -1098,6 +1098,31 @@ function createWindow(): void {
     return saveTranscriptions(transcriptions);
   });
 
+  // External links handler
+  ipcMain.handle('open-external', async (event, url: string) => {
+    try {
+      // Validate that the URL is safe to open
+      const allowedDomains = ['console.groq.com', 'groq.com'];
+      const parsedUrl = new URL(url);
+      
+      // Check if the domain is in the allowed list
+      const isAllowed = allowedDomains.some(domain => 
+        parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`)
+      );
+      
+      if (!isAllowed) {
+        console.error('Attempted to open disallowed URL:', url);
+        return;
+      }
+      
+      // Open the URL in the user's default browser
+      await shell.openExternal(url);
+      console.log('Opened external URL:', url);
+    } catch (error) {
+      console.error('Failed to open external URL:', error);
+    }
+  });
+
   // Handle window close event
   mainWindow.on('close', (event) => {
     // Prevent default close behavior
@@ -1371,7 +1396,7 @@ function createTray(): void {
   checkStartupStatus();
 }
 
-function createActiveWindow(): void {
+function createActiveWindow(startRecording: boolean = false): void {
   // Create the active window as a separate independent window
   activeWindow = new BrowserWindow({
     fullscreen: true, // Always fullscreen
@@ -1439,7 +1464,18 @@ function createActiveWindow(): void {
   // Show active window when ready
   activeWindow.once('ready-to-show', () => {
     activeWindow.show();
-    // Window is fullscreen, no positioning needed
+    isActiveWindowVisible = true;
+    
+    // If recording should start immediately, send the event after the window is ready
+    if (startRecording && activeWindow && !activeWindow.isDestroyed()) {
+      // Wait a tiny bit for webContents to be fully ready
+      setTimeout(() => {
+        if (activeWindow && !activeWindow.isDestroyed()) {
+          activeWindow.webContents.send('start-recording');
+          console.log('Recording started after window ready');
+        }
+      }, 100);
+    }
   });
 
   // Handle active window close
@@ -1777,7 +1813,7 @@ function showAboutDialog(): void {
       </div>
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-      <p class="version">Version 1.1.0</p>
+      <p class="version">Version 1.1.1</p>
       <div class="features">
         <p><strong>Quick Shortcuts:</strong></p>
         <ul>
@@ -1871,14 +1907,14 @@ if (!gotTheLock) {
           console.log('Ctrl+Shift+M held down - showing active window and starting recording');
           isShowing = true;
           if (!activeWindow || activeWindow.isDestroyed()) {
-            createActiveWindow();
+            createActiveWindow(true); // Pass true to start recording immediately
           } else {
             activeWindow.show();
             isActiveWindowVisible = true;
-          }
-          // Trigger recording start in active window
-          if (activeWindow && !activeWindow.isDestroyed()) {
-            activeWindow.webContents.send('start-recording');
+            // Trigger recording start in active window
+            if (activeWindow && !activeWindow.isDestroyed()) {
+              activeWindow.webContents.send('start-recording');
+            }
           }
         }
       }
@@ -1889,14 +1925,14 @@ if (!gotTheLock) {
           console.log('Alt+Shift+M held down - showing active window and starting recording');
           isShowing = true;
           if (!activeWindow || activeWindow.isDestroyed()) {
-            createActiveWindow();
+            createActiveWindow(true); // Pass true to start recording immediately
           } else {
             activeWindow.show();
             isActiveWindowVisible = true;
-          }
-          // Trigger recording start in active window
-          if (activeWindow && !activeWindow.isDestroyed()) {
-            activeWindow.webContents.send('start-recording');
+            // Trigger recording start in active window
+            if (activeWindow && !activeWindow.isDestroyed()) {
+              activeWindow.webContents.send('start-recording');
+            }
           }
         }
       }
@@ -1907,14 +1943,14 @@ if (!gotTheLock) {
           console.log('F12 held down - showing active window and starting recording');
           isShowing = true;
           if (!activeWindow || activeWindow.isDestroyed()) {
-            createActiveWindow();
+            createActiveWindow(true); // Pass true to start recording immediately
           } else {
             activeWindow.show();
             isActiveWindowVisible = true;
-          }
-          // Trigger recording start in active window
-          if (activeWindow && !activeWindow.isDestroyed()) {
-            activeWindow.webContents.send('start-recording');
+            // Trigger recording start in active window
+            if (activeWindow && !activeWindow.isDestroyed()) {
+              activeWindow.webContents.send('start-recording');
+            }
           }
         }
       }

@@ -52,7 +52,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Onboarding management
   checkOnboardingStatus: () => ipcRenderer.invoke('check-onboarding-status'),
   completeOnboarding: () => ipcRenderer.invoke('complete-onboarding'),
-  skipOnboarding: () => ipcRenderer.invoke('skip-onboarding'),
   clearAllData: () => ipcRenderer.invoke('clear-all-data'),
   // Authentication methods
   getAuthStatus: () => ipcRenderer.invoke('get-auth-status'),
@@ -77,5 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeUpdateListener: () => {
     ipcRenderer.removeAllListeners('update-status');
-  }
+  },
+  // External links
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url)
 });

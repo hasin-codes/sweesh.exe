@@ -42,7 +42,6 @@ export interface ElectronAPI {
   // Onboarding management
   checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean, isAuthenticated: boolean}>;
   completeOnboarding: () => Promise<boolean>;
-  skipOnboarding: () => Promise<boolean>;
   clearAllData: () => Promise<{success: boolean, error?: string}>;
   // Authentication methods
   getAuthStatus: () => Promise<{isAuthenticated: boolean, user?: any}>;
@@ -57,6 +56,8 @@ export interface ElectronAPI {
   quitAndInstallUpdate: () => Promise<{success: boolean, error?: string}>;
   onUpdateStatus: (callback: (data: {status: string, version?: string, error?: string, progress?: any}) => void) => void;
   removeUpdateListener: () => void;
+  // External links
+  openExternal: (url: string) => Promise<void>;
 }
 
 declare global {
