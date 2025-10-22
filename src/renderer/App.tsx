@@ -26,6 +26,29 @@ export default function Home() {
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([
     
   ])
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'warning' | 'error' }>({ 
+    show: false, 
+    message: "", 
+    type: 'success' 
+  })
+
+  // Listen for toast notifications from main process
+  useEffect(() => {
+    if (window.electronAPI) {
+      const handleToast = (data: { message: string; type: string }) => {
+        console.log('🍞 Toast received:', data)
+        setToast({ 
+          show: true, 
+          message: data.message, 
+          type: data.type as 'success' | 'warning' | 'error' 
+        })
+        setTimeout(() => setToast({ show: false, message: "", type: 'success' }), 5000)
+      }
+
+      window.electronAPI.onToastNotification(handleToast)
+      return () => window.electronAPI.removeToastListener()
+    }
+  }, [])
 
   // Check onboarding status on mount
   useEffect(() => {
@@ -72,7 +95,20 @@ export default function Home() {
     if (window.electronAPI) {
       window.electronAPI.onNewTranscription((transcriptionData: Transcription) => {
         console.log("Received new transcription:", transcriptionData)
-        setTranscriptions((prev) => [transcriptionData, ...prev])
+        setTranscriptions((prev) => {
+          const updated = [transcriptionData, ...prev]
+          // Save to disk immediately when new transcription is received
+          window.electronAPI?.saveTranscriptions?.(updated as any).then((result: any) => {
+            if (result?.success) {
+              console.log('✓ Transcription saved to disk')
+            } else {
+              console.error('✗ Failed to save transcription to disk')
+            }
+          }).catch((err: any) => {
+            console.error('✗ Error saving transcription:', err)
+          })
+          return updated
+        })
       })
     }
 
@@ -243,6 +279,19 @@ export default function Home() {
           onDelete={handleDeleteTranscription}
           onUpdate={handleTranscriptionUpdate}
         />
+      )}
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed top-4 right-4 z-[9999]">
+          <div className={`px-6 py-4 rounded-lg shadow-2xl border-2 min-w-[300px] ${
+            toast.type === 'success' ? 'bg-green-500 border-green-400 text-white' : 
+            toast.type === 'warning' ? 'bg-yellow-500 border-yellow-400 text-white' : 
+            'bg-red-500 border-red-400 text-white'
+          }`}>
+            <p className="text-base font-semibold">{toast.message}</p>
+          </div>
+        </div>
       )}
     </div>
   )

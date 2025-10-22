@@ -1,6 +1,6 @@
 {
   "name": "Sweesh",
-  "version": "0.0.5",
+  "version": "1.0.1",
   "description": "Speak it, Send it",
   "main": "dist/main.js",
   "scripts": {

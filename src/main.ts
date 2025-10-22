@@ -152,7 +152,18 @@ let encryptionBackend = 'unknown';
 function checkEncryptionAvailability(): void {
   try {
     isEncryptionAvailable = safeStorage.isEncryptionAvailable();
-    encryptionBackend = safeStorage.getSelectedStorageBackend();
+    
+    // getSelectedStorageBackend is only available in newer Electron versions
+    try {
+      const anySafe: any = safeStorage as any;
+      if (typeof anySafe.getSelectedStorageBackend === 'function') {
+        encryptionBackend = anySafe.getSelectedStorageBackend();
+      } else {
+        encryptionBackend = isEncryptionAvailable ? 'available' : 'unavailable';
+      }
+    } catch {
+      encryptionBackend = isEncryptionAvailable ? 'available' : 'unavailable';
+    }
     
     console.log(`Encryption availability: ${isEncryptionAvailable}`);
     console.log(`Encryption backend: ${encryptionBackend}`);
@@ -532,9 +543,27 @@ function saveTranscriptions(transcriptions: any[]): { success: boolean } {
   try {
     fs.writeFileSync(TRANSCRIPTIONS_FILE, JSON.stringify(transcriptions, null, 2));
     console.log('Transcriptions saved successfully');
+    
+    // Send toast notification to main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('toast-notification', {
+        message: `💾 Transcription saved to ${path.basename(TRANSCRIPTIONS_FILE)}`,
+        type: 'success'
+      });
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Failed to save transcriptions:', error);
+    
+    // Send error toast to main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('toast-notification', {
+        message: '✗ Failed to save transcription',
+        type: 'error'
+      });
+    }
+    
     return { success: false };
   }
 }
@@ -561,8 +590,8 @@ function initializeGroqClient(apiKey?: string): boolean {
   }
 }
 
-// Try to initialize Groq client on startup
-initializeGroqClient();
+// NOTE: Groq client initialization moved to after app.whenReady() 
+// because safeStorage is only available after the app is ready
 
 // Migration from .env to secure storage
 function migrateFromEnv(): void {
@@ -681,7 +710,17 @@ function createWindow(): void {
       // Check if Groq client is initialized
       if (!groq) {
         console.error('Groq client not initialized. Please configure API key in settings.');
-        return { success: false, error: 'API key not configured. Please set your Groq API key in Settings.' };
+        const errorMsg = 'API key not configured. Please set your Groq API key in Settings.';
+        
+        // Send error toast to main window
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('toast-notification', {
+            message: `✗ Transcription failed: ${errorMsg}`,
+            type: 'error'
+          });
+        }
+        
+        return { success: false, error: errorMsg };
       }
       
       console.log('Starting transcription with Groq Whisper API...');
@@ -719,11 +758,29 @@ function createWindow(): void {
         // Continue with transcription even if clipboard fails
       }
       
+      // Send success toast to main window (no sound, just silent notification)
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('toast-notification', {
+          message: '✓ Transcription successful',
+          type: 'success'
+        });
+      }
+      
       return { success: true, text: transcription };
       
     } catch (error) {
       console.error('Transcription failed:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Send error toast to main window
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('toast-notification', {
+          message: `✗ Transcription failed: ${errorMsg}`,
+          type: 'error'
+        });
+      }
+      
+      return { success: false, error: errorMsg };
     }
   });
 
@@ -844,7 +901,19 @@ function createWindow(): void {
   ipcMain.handle('get-encryption-status', () => {
     const platform = os.platform();
     const currentEncryptionAvailable = safeStorage.isEncryptionAvailable();
-    const currentBackend = safeStorage.getSelectedStorageBackend();
+    
+    // getSelectedStorageBackend is only available in newer Electron versions
+    let currentBackend = 'unknown';
+    try {
+      const anySafe: any = safeStorage as any;
+      if (typeof anySafe.getSelectedStorageBackend === 'function') {
+        currentBackend = anySafe.getSelectedStorageBackend();
+      } else {
+        currentBackend = currentEncryptionAvailable ? 'available' : 'unavailable';
+      }
+    } catch {
+      currentBackend = currentEncryptionAvailable ? 'available' : 'unavailable';
+    }
     
     let warningMessage = null;
     let setupInstructions = null;
@@ -1440,6 +1509,28 @@ if (!gotTheLock) {
   registerDeepLinkProtocol();
   
   createWindow();
+  
+  // Initialize Groq client with saved API key (after app is ready so safeStorage is available)
+  setTimeout(() => {
+    const apiKeyLoaded = initializeGroqClient();
+    const transcriptions = loadTranscriptions();
+    const transcriptionCount = transcriptions.length;
+    
+    // Send startup status toast to main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (apiKeyLoaded) {
+        mainWindow.webContents.send('toast-notification', {
+          message: `✓ API key loaded | ${transcriptionCount} transcription${transcriptionCount !== 1 ? 's' : ''} retrieved from ${TRANSCRIPTIONS_FILE}`,
+          type: 'success'
+        });
+      } else {
+        mainWindow.webContents.send('toast-notification', {
+          message: `⚠ No API key found. Please configure in Settings | ${transcriptionCount} transcription${transcriptionCount !== 1 ? 's' : ''} retrieved`,
+          type: 'warning'
+        });
+      }
+    }
+  }, 1500); // Wait for window to be ready to receive messages
   
   // Setup auto-updater to check for updates on app start
   setupAutoUpdater();
