@@ -221,15 +221,10 @@ export default function Home() {
             <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">
               F12
             </kbd>{" "}
-            to show the voice widget, <strong>release</strong> to hide it
+            to start, release to stop <strong>release</strong> to hide it
           </p>
-          <div className="text-sm text-gray-400 mb-4">
-            💡 Hold the key combination anywhere on your system to show the voice
-            widget, release to hide it
-          </div>
-          <div className="text-xs text-gray-500 mb-4">
-            Note: Alt+M is reserved by Windows system, so try F12 for testing.
-          </div>
+          
+          
         </div>
 
         {/* Transcriptions Grid */}
