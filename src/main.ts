@@ -48,6 +48,73 @@ loadEnvFromFile();
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
+// Path to pending updates
+const UPDATER_PENDING_DIR = path.join(app.getPath('userData'), '..', 'sweesh-updater', 'pending');
+
+// Function to check for and install pending updates on startup
+function checkAndInstallPendingUpdate(): void {
+  try {
+    if (!fs.existsSync(UPDATER_PENDING_DIR)) {
+      console.log('No pending update directory found');
+      return;
+    }
+
+    // Look for any .exe files in the pending directory
+    const files = fs.readdirSync(UPDATER_PENDING_DIR);
+    const installerFile = files.find(file => file.endsWith('.exe'));
+
+    if (installerFile) {
+      const installerPath = path.join(UPDATER_PENDING_DIR, installerFile);
+      console.log('Found pending installer:', installerPath);
+      
+      // Launch the installer
+      console.log('Launching installer and quitting app...');
+      
+      // Use spawn to launch the installer without waiting
+      const { spawn } = require('child_process');
+      spawn(installerPath, [], {
+        detached: true,
+        stdio: 'ignore'
+      }).unref();
+      
+      // Force quit the app immediately
+      setTimeout(() => {
+        app.exit(0);
+      }, 500);
+    } else {
+      console.log('No installer file found in pending directory');
+    }
+  } catch (error) {
+    console.error('Error checking for pending updates:', error);
+  }
+}
+
+// Function to force quit all app processes
+function forceQuitApp(): void {
+  try {
+    console.log('Force quitting application...');
+    
+    // Cleanup
+    if (keyListener) {
+      keyListener.kill();
+    }
+    globalShortcut.unregisterAll();
+    
+    // Close all windows
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) {
+        win.destroy();
+      }
+    });
+    
+    // Force exit
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during force quit:', error);
+    process.exit(1);
+  }
+}
+
 // Auto-updater configuration
 function setupAutoUpdater(): void {
   // Disable auto-download in development for safety
@@ -1081,7 +1148,24 @@ function createWindow(): void {
 
   ipcMain.handle('quit-and-install-update', () => {
     try {
-      autoUpdater.quitAndInstall();
+      // Close all windows first
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) {
+          win.destroy();
+        }
+      });
+      
+      // Cleanup listeners
+      if (keyListener) {
+        keyListener.kill();
+      }
+      globalShortcut.unregisterAll();
+      
+      // Use setImmediate to ensure cleanup completes before quitting
+      setImmediate(() => {
+        autoUpdater.quitAndInstall(false, true);
+      });
+      
       return { success: true };
     } catch (error) {
       log.error('Failed to install update:', error);
@@ -1378,7 +1462,7 @@ function createTray(): void {
     {
       label: 'Exit',
       click: () => {
-        app.quit();
+        forceQuitApp();
       }
     }
   ]);
@@ -1688,7 +1772,7 @@ function updateTrayMenu(isStartupEnabled?: boolean): void {
     {
       label: 'Exit',
       click: () => {
-        app.quit();
+        forceQuitApp();
       }
     }
   ]);
@@ -1813,7 +1897,7 @@ function showAboutDialog(): void {
       </div>
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-      <p class="version">Version 1.1.1</p>
+      <p class="version">Version 1.1.2</p>
       <div class="features">
         <p><strong>Quick Shortcuts:</strong></p>
         <ul>
@@ -1842,6 +1926,9 @@ if (!gotTheLock) {
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(() => {
+  // Check for pending updates first - if found, install and quit
+  checkAndInstallPendingUpdate();
+  
   // Check encryption availability after app is ready
   checkEncryptionAvailability();
   
@@ -2048,10 +2135,18 @@ app.on('activate', () => {
 
 // Unregister all shortcuts and stop keyboard listener when the app is about to quit
 app.on('will-quit', () => {
+  console.log('App will quit - cleaning up...');
   globalShortcut.unregisterAll();
   if (keyListener) {
     keyListener.kill();
   }
+  
+  // Destroy all windows
+  BrowserWindow.getAllWindows().forEach(win => {
+    if (!win.isDestroyed()) {
+      win.destroy();
+    }
+  });
 });
 
 // In this file you can include the rest of your app's specific main process
