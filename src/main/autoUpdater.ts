@@ -148,8 +148,12 @@ export function showUpdateModal(mainWindow: BrowserWindow, version: string): Pro
     log(`Showing update modal for version ${version}`);
     
     // Send IPC message to renderer to show modal
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-starting', version);
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+      try {
+        mainWindow.webContents.send('update-starting', version);
+      } catch (error) {
+        log(`Failed to send update-starting event: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     
     // Wait 3 seconds
@@ -226,6 +230,12 @@ export async function handleAutoUpdate(mainWindow: BrowserWindow): Promise<boole
   log('=== Auto-Update Check Started ===');
   
   try {
+    // Validate mainWindow before proceeding
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      log('Main window is not available or destroyed, skipping auto-update check');
+      return false;
+    }
+    
     // Check for pending update
     const updateInfo = await checkForPendingUpdate();
     
@@ -235,6 +245,12 @@ export async function handleAutoUpdate(mainWindow: BrowserWindow): Promise<boole
     }
     
     log(`Update will be installed: ${updateInfo.installerVersion}`);
+    
+    // Double-check window is still valid before showing modal
+    if (mainWindow.isDestroyed()) {
+      log('Main window was destroyed, aborting update');
+      return false;
+    }
     
     // Show update modal to user
     await showUpdateModal(mainWindow, updateInfo.installerVersion);

@@ -1962,7 +1962,7 @@ function showAboutDialog(): void {
       </div>
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-      <p class="version">Version 1.2.1</p>
+      <p class="version">Version 1.3.0</p>
       <div class="features">
         <p><strong>Quick Shortcuts:</strong></p>
         <ul>
@@ -1999,7 +1999,16 @@ if (!gotTheLock) {
   
   createWindow();
   
-  // Check for forced auto-update AFTER window is created
+  // Wait for window to be ready before checking for updates
+  await new Promise<void>((resolve) => {
+    if (mainWindow.webContents.isLoading()) {
+      mainWindow.webContents.once('did-finish-load', () => resolve());
+    } else {
+      resolve();
+    }
+  });
+  
+  // Check for forced auto-update AFTER window is ready
   // This allows us to show the update modal before installing
   const updateTriggered = await handleAutoUpdate(mainWindow);
   

@@ -51,16 +51,16 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
          <motion.div
            className="absolute inset-0"
            style={{
-             background: "linear-gradient(90deg, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7)",
+             background: "linear-gradient(90deg, #ff4500, #ff6b35, #ff8c42, #ffa500, #ff8c42, #ff6b35, #ff4500)",
              filter: `blur(${blurAmount}px)`,
              opacity: 0.94,
            }}
            animate={{
              background: [
-               "linear-gradient(90deg, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7)",
-               "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899)",
-               "linear-gradient(90deg, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6)",
-               "linear-gradient(90deg, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7)",
+               "linear-gradient(90deg, #ff4500, #ff6b35, #ff8c42, #ffa500, #ff8c42, #ff6b35, #ff4500)",
+               "linear-gradient(90deg, #ffa500, #ff8c42, #ff6b35, #ff4500, #ff6b35, #ff8c42, #ffa500)",
+               "linear-gradient(90deg, #ff6b35, #ffa500, #ff4500, #ff8c42, #ffa500, #ff4500, #ff6b35)",
+               "linear-gradient(90deg, #ff4500, #ff6b35, #ff8c42, #ffa500, #ff8c42, #ff6b35, #ff4500)",
              ],
            }}
            transition={{
@@ -89,16 +89,16 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
          <motion.div
            className="absolute inset-0"
            style={{
-             background: "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899)",
+             background: "linear-gradient(90deg, #ffa500, #ff8c42, #ff6b35, #ff4500, #ff6b35, #ff8c42, #ffa500)",
              filter: `blur(${blurAmount}px)`,
              opacity: 0.94,
            }}
            animate={{
              background: [
-               "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899)",
-               "linear-gradient(90deg, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6)",
-               "linear-gradient(90deg, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7)",
-               "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6, #ec4899, #a855f7, #3b82f6, #ec4899)",
+               "linear-gradient(90deg, #ffa500, #ff8c42, #ff6b35, #ff4500, #ff6b35, #ff8c42, #ffa500)",
+               "linear-gradient(90deg, #ff4500, #ffa500, #ff8c42, #ff6b35, #ff8c42, #ffa500, #ff4500)",
+               "linear-gradient(90deg, #ff8c42, #ff6b35, #ffa500, #ff4500, #ff6b35, #ff8c42, #ffa500)",
+               "linear-gradient(90deg, #ffa500, #ff8c42, #ff6b35, #ff4500, #ff6b35, #ff8c42, #ffa500)",
              ],
            }}
            transition={{
@@ -127,16 +127,16 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
          <motion.div
            className="absolute inset-0"
            style={{
-             background: "linear-gradient(180deg, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6)",
+             background: "linear-gradient(180deg, #ff6b35, #ff4500, #ff8c42, #ffa500, #ff8c42, #ff4500, #ff6b35)",
              filter: `blur(${blurAmount}px)`,
              opacity: 0.94,
            }}
            animate={{
              background: [
-               "linear-gradient(180deg, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6)",
-               "linear-gradient(180deg, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899)",
-               "linear-gradient(180deg, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7)",
-               "linear-gradient(180deg, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6)",
+               "linear-gradient(180deg, #ff6b35, #ff4500, #ff8c42, #ffa500, #ff8c42, #ff4500, #ff6b35)",
+               "linear-gradient(180deg, #ffa500, #ff6b35, #ff4500, #ff8c42, #ff4500, #ff6b35, #ffa500)",
+               "linear-gradient(180deg, #ff4500, #ffa500, #ff6b35, #ff8c42, #ffa500, #ff6b35, #ff4500)",
+               "linear-gradient(180deg, #ff6b35, #ff4500, #ff8c42, #ffa500, #ff8c42, #ff4500, #ff6b35)",
              ],
            }}
            transition={{
@@ -165,16 +165,16 @@ export function AuroraBorder({ active, audioLevel = 0 }: AuroraBorderProps) {
          <motion.div
            className="absolute inset-0"
            style={{
-             background: "linear-gradient(180deg, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899)",
+             background: "linear-gradient(180deg, #ffa500, #ff8c42, #ff4500, #ff6b35, #ff4500, #ff8c42, #ffa500)",
              filter: `blur(${blurAmount}px)`,
              opacity: 0.98,
            }}
            animate={{
              background: [
-               "linear-gradient(180deg, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899)",
-               "linear-gradient(180deg, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7)",
-               "linear-gradient(180deg, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6)",
-               "linear-gradient(180deg, #ec4899, #3b82f6, #a855f7, #ec4899, #3b82f6, #a855f7, #ec4899)",
+               "linear-gradient(180deg, #ffa500, #ff8c42, #ff4500, #ff6b35, #ff4500, #ff8c42, #ffa500)",
+               "linear-gradient(180deg, #ff6b35, #ffa500, #ff8c42, #ff4500, #ff8c42, #ffa500, #ff6b35)",
+               "linear-gradient(180deg, #ff4500, #ff6b35, #ffa500, #ff8c42, #ff6b35, #ffa500, #ff4500)",
+               "linear-gradient(180deg, #ffa500, #ff8c42, #ff4500, #ff6b35, #ff4500, #ff8c42, #ffa500)",
              ],
            }}
            transition={{

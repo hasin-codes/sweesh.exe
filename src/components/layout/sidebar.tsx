@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Settings, User, Download } from "lucide-react"
+import { Plus, Settings, User, Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 
@@ -68,7 +68,7 @@ export function Topbar({ onSettings, onAddRecording }: TopbarProps) {
           className={`relative hover:bg-gray-700 w-10 h-10 text-white ${hasPendingUpdate ? 'text-orange-500' : ''}`}
           title={hasPendingUpdate ? 'Update available! Click to install' : 'No updates'}
         >
-          <Download className="w-5 h-5" />
+          <Bell className="w-5 h-5" />
           {hasPendingUpdate && (
             <>
               {/* Pulsing dot indicator */}

@@ -16,7 +16,7 @@ export function Titlebar() {
             <span className="text-sm font-semibold text-white tracking-tight">Sweesh</span>
           </div>
           <div className="h-4 w-px bg-gray-600" />
-          <span className="text-xs text-gray-300 font-medium">Speak it, Send it</span>
+          <span className="text-xs text-gray-300 font-medium">v1.3.0</span>
         </div>
         {/* Right side - Window controls */}
         <div className="flex items-center gap-2 window-controls">
