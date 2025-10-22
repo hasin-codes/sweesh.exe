@@ -9,13 +9,15 @@
 ## 🌟 Features
 
 ### Core Functionality
-- **Real-time Voice Transcription**: Convert speech to text instantly using Groq's Whisper API
+- **Real-time Voice Transcription**: Convert speech to text instantly using Groq's Whisper API (whisper-large-v3 model)
 - **Global Keyboard Shortcuts**: Hold `Ctrl+Shift+M`, `Alt+Shift+M`, or `F12` anywhere on your system to start recording
-- **Automatic Clipboard Copy**: Every transcription is automatically copied to your system clipboard
+- **Automatic Clipboard Copy**: Every transcription is automatically copied to your system clipboard (works in background)
 - **Hold-to-Talk Recording**: Press and hold shortcut keys to record, release to stop
 - **Dual Window System**: Main application window and fullscreen transparent recording overlay
 - **System Tray Integration**: Minimize to system tray for quick access with startup options
 - **Transcription Management**: View, edit, copy, and delete your transcriptions
+- **Persistent Storage**: All transcriptions saved locally in encrypted format with automatic loading on startup
+- **Auto-Update System**: Automatic update checks and background downloads with seamless installation
 - **Cross-platform**: Available for Windows, macOS, and Linux
 
 ### First-Run Experience
@@ -50,9 +52,14 @@
 - **Settings Management**: Comprehensive settings with API key management, encryption status, and preferences
 - **Microphone Permissions**: Built-in permission handling and OS settings access
 - **Transcription Editing**: In-place editing of transcribed text
+- **Persistent Transcription History**: All transcriptions automatically saved to `transcriptions.json` with search capability
 - **Background Operation**: Clipboard copy works even when app is minimized or in background
 - **Error Handling**: Robust error handling for API failures and microphone issues
-- **Toast Notifications**: User feedback for API key operations and encryption status
+- **Toast Notification System**: Real-time visual feedback for transcription success/failure, API operations, and encryption status
+- **Auto-Update Management**: Checks for updates on startup, downloads in background, installs on app quit
+- **Deep Link Authentication**: OAuth integration with Clerk for secure user authentication via `sweesh://` protocol
+- **JWT Token Validation**: Secure token validation and storage for authenticated sessions
+- **Data Export**: Clear all user data option for privacy and testing
 - **Startup Management**: Optional system startup integration with tray menu controls
 
 ## 🚀 Quick Start
@@ -145,24 +152,35 @@ sweesh/
 - **Build Tool**: Webpack 5
 - **UI Components**: Custom components with Radix UI primitives
 - **Icons**: Lucide React
+- **Animations**: Framer Motion for smooth UI transitions
 - **Font**: Custom "EditorsNote" typography
 - **Transcription**: Groq Whisper API via `groq-sdk` (whisper-large-v3 model)
 - **Audio Processing**: Web Audio API with MediaRecorder
-- **Global Shortcuts**: `node-global-key-listener`
+- **Global Shortcuts**: `node-global-key-listener` for system-wide key detection
 - **Clipboard**: Electron's native clipboard API
+- **Auto-Updates**: `electron-updater` with GitHub Releases
+- **Logging**: `electron-log` for comprehensive logging
+- **Authentication**: Clerk with JWT validation and deep link OAuth
+- **Encryption**: Electron `safeStorage` with AES-256-CBC fallback
+- **Data Persistence**: JSON file storage with encryption
 
 ### Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `npm start` | Start the Electron app |
-| `npm run dev` | Start development with hot reload |
-| `npm run build` | Build for production |
-| `npm run build:watch` | Build with file watching |
+| `npm start` | Start the Electron app (requires prior build) |
+| `npm run dev` | Start development with hot reload and watch mode |
+| `npm run build` | Build renderer for production |
+| `npm run build:watch` | Build renderer with file watching |
 | `npm run build:main` | Build main process only |
 | `npm run build:main:watch` | Build main process with watching |
-| `npm run clean` | Clean build directory |
-| `npm run rebuild` | Clean and rebuild everything |
+| `npm run clean` | Clean dist directory |
+| `npm run rebuild` | Clean and rebuild everything (main + renderer) |
+| `npm run dist` | Build distributable for current platform |
+| `npm run dist:win` | Build Windows distributable |
+| `npm run dist:mac` | Build macOS distributable |
+| `npm run dist:linux` | Build Linux distributable |
+| `npm run release` | Build and publish to GitHub releases (requires GH_TOKEN) |
 
 ### Development Workflow
 
@@ -322,7 +340,10 @@ The project includes pre-built executables for multiple platforms:
 - **Transcription**: `transcribe-audio`, `send-transcription-to-main`; renderer listens on `new-transcription`
 - **API Key Management**: `save-api-key`, `get-api-key-status`, `update-api-key`, `delete-api-key`
 - **Encryption Status**: `get-encryption-status`
+- **Authentication**: `get-auth-status`, `start-auth-flow`, `logout`; renderer listens on `auth-success`, `auth-error`
 - **Onboarding**: `check-onboarding-status`, `complete-onboarding`, `skip-onboarding`
+- **Data Management**: `clear-all-data`, `load-transcriptions`, `save-transcriptions`
+- **Auto-Update**: `check-for-updates`, `quit-and-install-update`; renderer listens on `update-status`
 - **Notifications**: `show-toast`; renderer listens on `toast-notification`
 
 ### Key Technologies
@@ -367,6 +388,17 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - **New users**: Complete the onboarding flow to set up your API key
 - **Existing users**: Use Settings to update your API key if needed
 
+**Toast notifications not appearing:**
+- ✅ **Fixed in v1.0.9**: Enhanced toast styling with solid colors and higher z-index
+- Check browser console for `🍞 Toast received:` debug messages
+- Toasts appear in top-right corner for 5 seconds
+- If still not visible, try refreshing the app (Ctrl+R in DevTools)
+
+**Settings modal crashes with encryption error:**
+- ✅ **Fixed in v1.0.9**: `safeStorage.getSelectedStorageBackend()` compatibility error resolved
+- The app now works with all Electron versions (v28+)
+- Encryption status displays correctly without crashes
+
 **Encryption unavailable / security warnings:**
 - The app automatically falls back to AES‑256-CBC encryption if OS‑level encryption isn't available
 - On Linux, install `libsecret` to enable OS‑level encryption and restart the app:
@@ -376,6 +408,25 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - **Note**: The Settings UI shows which encryption method is active and provides guidance when OS‑level encryption is missing
 - **Migration**: Existing `.env` files are automatically migrated to secure storage on first launch
 
+**Auto-update not working:**
+- Updates check automatically 3 seconds after app startup
+- Requires internet connection
+- Downloads happen in background
+- Updates install when you quit and restart the app
+- Check logs at `%APPDATA%\sweesh\logs\main.log` (Windows) for update status
+
+**Authentication issues:**
+- Deep link OAuth requires default browser to open
+- JWT tokens are validated and encrypted locally
+- Check if `sweesh://` protocol is registered (automatic on first run)
+- Clear auth data via Settings if experiencing issues
+
+**Transcriptions not persisting:**
+- All transcriptions auto-save to `transcriptions.json` in app data folder
+- Location: `app.getPath('userData')/transcriptions.json`
+- Check file permissions in app data directory
+- Use "Clear all data" option in Settings if corruption suspected
+
 **Clipboard not working:**
 - Clipboard copy happens automatically in the main process
 - Works even when app is minimized or in background
@@ -384,8 +435,9 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 
 **Global shortcuts not working:**
 - Try `F12` instead of `Ctrl+Shift+M` or `Alt+Shift+M` (some OS shortcuts may conflict)
-- Ensure the app has focus when first testing shortcuts
+- Ensure the app is running (check system tray)
 - Check if other applications are using the same key combinations
+- Restart app if shortcuts stop responding
 
 **App won't start:**
 - Make sure all dependencies are installed: `npm install`
@@ -393,6 +445,7 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - Try rebuilding: `npm run rebuild`
 - **New users**: Complete onboarding to set up API key
 - **Existing users**: Check if API key migration completed successfully
+- Clear app data if persistent issues: `%APPDATA%\sweesh` (Windows)
 
 **Build errors:**
 - Clear node_modules and reinstall: `rm -rf node_modules && npm install`
@@ -400,6 +453,12 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - Verify all required files are present
 - **API Key Setup**: Use onboarding flow or Settings UI instead of `.env` files
 - **Migration**: Check startup logs for API key migration status
+
+**Deprecated crypto warning:**
+- `crypto.createDecipher is deprecated` warning is non-critical
+- Only appears when using AES-256-CBC fallback encryption
+- Does not affect functionality
+- Will be updated in future release
 
 ### Debug Mode
 Run with debug logging:
@@ -455,14 +514,20 @@ If you encounter issues or have questions:
 
 ## 🔮 Roadmap
 
-### Upcoming Features
+### Upcoming Features (v1.1.0+)
+- [ ] Custom keyboard shortcuts configuration UI
+- [ ] Multiple language support for transcription
+- [ ] Transcription formatting options (capitalize, punctuation)
+- [ ] Export transcriptions to file (TXT, MD, JSON)
 - [ ] Real-time transcription streaming
-- [ ] Multiple language support
+- [ ] Speaker diarization (identify different speakers)
+- [ ] Local model support (offline transcription)
 - [ ] Cloud sync capabilities
-- [ ] Advanced audio processing
+- [ ] Advanced audio processing (noise reduction)
 - [ ] Plugin system for extensions
 - [ ] Mobile companion app
 - [ ] Team collaboration features
+- [ ] Dark/light theme toggle
 - [ ] Advanced export options
 
 ### Version History
@@ -474,6 +539,13 @@ If you encounter issues or have questions:
 - **v1.5.0**: Added secure API key management with OS-level encryption and AES-256-CBC fallback
 - **v1.6.0**: Implemented first-run onboarding flow with guided API key setup
 - **v1.7.0**: Enhanced Settings modal with compact design and improved user experience
+- **v1.8.0**: Added auto-update system with GitHub Releases integration
+- **v1.9.0**: Implemented deep link authentication with Clerk OAuth and JWT validation
+- **v1.0.9**: Fixed toast notifications display bug and Electron compatibility issues
+  - ✅ Fixed `safeStorage.getSelectedStorageBackend()` compatibility error
+  - ✅ Fixed toast notifications not appearing with enhanced styling
+  - ✅ Added toast debugging for better error tracking
+  - ✅ Improved encryption status handling across Electron versions
 
 ---
 
