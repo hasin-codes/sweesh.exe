@@ -78,5 +78,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('update-status');
   },
   // External links
-  openExternal: (url: string) => ipcRenderer.invoke('open-external', url)
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+  // Pending updates
+  checkPendingUpdate: () => ipcRenderer.invoke('check-pending-update'),
+  installPendingUpdate: () => ipcRenderer.invoke('install-pending-update'),
+  // Update modal event
+  onUpdateStarting: (callback: (version: string) => void) => {
+    ipcRenderer.on('update-starting', (event, version) => callback(version));
+  }
 });

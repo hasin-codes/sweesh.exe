@@ -58,6 +58,11 @@ export interface ElectronAPI {
   removeUpdateListener: () => void;
   // External links
   openExternal: (url: string) => Promise<void>;
+  // Pending updates
+  checkPendingUpdate: () => Promise<boolean>;
+  installPendingUpdate: () => Promise<void>;
+  // Update modal event
+  onUpdateStarting: (callback: (version: string) => void) => void;
 }
 
 declare global {

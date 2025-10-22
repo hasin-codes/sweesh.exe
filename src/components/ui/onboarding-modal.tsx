@@ -418,34 +418,34 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
                   {/* Input field */}
                   <div className="space-y-2">
                     <label htmlFor="api-key" className="block text-sm font-medium text-white">
-                      Groq API Key
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="api-key"
-                        type="password"
-                        placeholder="gsk_..."
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        disabled={isUpdating}
+                        Groq API Key
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="api-key"
+                          type="password"
+                          placeholder="gsk_..."
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          onKeyPress={handleKeyPress}
+                          disabled={isUpdating}
                         className="w-full text-sm py-2.5 px-3 border border-gray-700 rounded-lg bg-gray-900/50 text-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
-                        autoFocus
-                      />
-                      {apiKey && apiKey.startsWith('gsk_') && (
+                          autoFocus
+                        />
+                        {apiKey && apiKey.startsWith('gsk_') && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
                           <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
                     
                     {/* Encryption status inline */}
                     <p className="flex items-center gap-1.5 text-gray-300 text-xs">
                       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
                       <span>
                         {encryptionStatus.isEncryptionAvailable 
                           ? `Encryption available on ${encryptionStatus.platform}` 
@@ -453,25 +453,25 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
                       </span>
                     </p>
 
-                    {saveMessage && (
+                      {saveMessage && (
                       <div className={`flex items-center gap-1.5 text-xs p-2 rounded-lg ${
-                        saveMessage.includes('successfully') 
+                          saveMessage.includes('successfully') 
                           ? 'bg-green-500/10 text-white border border-green-500/20' 
-                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}>
                         <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          {saveMessage.includes('successfully') ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          )}
-                        </svg>
-                        <span>{saveMessage}</span>
-                      </div>
-                    )}
+                            {saveMessage.includes('successfully') ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            )}
+                          </svg>
+                          <span>{saveMessage}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="pt-1">
                 {!apiKeyStatus.hasKey ? (

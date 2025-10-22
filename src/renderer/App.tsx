@@ -7,6 +7,7 @@ import { TranscriptionCard } from "@/components/layout/transcription-card"
 import { SettingsModal } from "@/components/ui/settings-modal"
 import { TranscriptionModal } from "@/components/ui/transcription-modal"
 import { OnboardingModal } from "@/components/ui/onboarding-modal"
+import { UpdateModal } from "@/components/ui/update-modal"
 
 interface Transcription {
   id: number
@@ -31,6 +32,19 @@ export default function Home() {
     message: "", 
     type: 'success' 
   })
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [updateVersion, setUpdateVersion] = useState('')
+
+  // Listen for update-starting event from main process
+  useEffect(() => {
+    if (window.electronAPI && window.electronAPI.onUpdateStarting) {
+      window.electronAPI.onUpdateStarting((version: string) => {
+        console.log('🔄 Update starting:', version)
+        setUpdateVersion(version)
+        setShowUpdateModal(true)
+      })
+    }
+  }, [])
 
   // Listen for toast notifications from main process
   useEffect(() => {
@@ -251,6 +265,14 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Update Modal */}
+      {showUpdateModal && (
+        <UpdateModal 
+          version={updateVersion}
+          onComplete={() => setShowUpdateModal(false)} 
+        />
+      )}
 
       {/* Onboarding Modal */}
       {showOnboarding && (

@@ -10,6 +10,7 @@ import * as jwt from 'jsonwebtoken';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import jwksClient from 'jwks-rsa';
+import { handleAutoUpdate } from './main/autoUpdater';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -117,16 +118,16 @@ function forceQuitApp(): void {
 
 // Auto-updater configuration
 function setupAutoUpdater(): void {
-  // Disable auto-download in development for safety
-  if (process.env.NODE_ENV === 'development') {
-    autoUpdater.autoDownload = false;
-    log.info('Auto-updater disabled in development mode');
-    return;
-  }
-
   // Configure auto-updater
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // In development: completely disabled, use pending directory check instead
+  // In production: enable both checking and auto-download
+  if (process.env.NODE_ENV === 'development') {
+    log.info('Auto-updater in development mode: disabled. Use pending directory check instead.');
+  } else {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    log.info('Auto-updater in production mode: fully enabled');
+  }
 
   // Auto-updater events
   autoUpdater.on('checking-for-update', () => {
@@ -185,12 +186,18 @@ function setupAutoUpdater(): void {
   });
 
   // Check for updates on app start (after a short delay)
-  setTimeout(() => {
-    log.info('Starting auto-update check...');
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-      log.error('Failed to check for updates:', error);
-    });
-  }, 3000); // 3 second delay to let the app initialize
+  // Only check for updates in production mode
+  // In development, use the manual pending directory check instead
+  if (process.env.NODE_ENV !== 'development') {
+    setTimeout(() => {
+      log.info('Starting auto-update check...');
+      autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+        log.error('Failed to check for updates:', error);
+      });
+    }, 3000); // 3 second delay to let the app initialize
+  } else {
+    log.info('Development mode: Skipping auto-update check. Use pending directory check instead.');
+  }
 }
 
 let mainWindow: BrowserWindow;
@@ -1137,6 +1144,12 @@ function createWindow(): void {
 
   // Auto-Update IPC Handlers
   ipcMain.handle('check-for-updates', async () => {
+    // In development mode, skip auto-updater and rely on pending directory check
+    if (process.env.NODE_ENV === 'development') {
+      log.info('Development mode: Skipping auto-updater check. Use pending directory check instead.');
+      return { success: false, error: 'Auto-updater disabled in development mode. Use pending directory check.' };
+    }
+    
     try {
       const result = await autoUpdater.checkForUpdates();
       return { success: true, updateInfo: result?.updateInfo };
@@ -1204,6 +1217,58 @@ function createWindow(): void {
       console.log('Opened external URL:', url);
     } catch (error) {
       console.error('Failed to open external URL:', error);
+    }
+  });
+
+  // Pending update handlers
+  ipcMain.handle('check-pending-update', () => {
+    try {
+      if (!fs.existsSync(UPDATER_PENDING_DIR)) {
+        return false;
+      }
+
+      const files = fs.readdirSync(UPDATER_PENDING_DIR);
+      const hasInstaller = files.some(file => file.endsWith('.exe'));
+      
+      if (hasInstaller) {
+        console.log('Pending update detected:', files.find(f => f.endsWith('.exe')));
+      }
+      
+      return hasInstaller;
+    } catch (error) {
+      console.error('Error checking for pending update:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle('install-pending-update', () => {
+    try {
+      if (!fs.existsSync(UPDATER_PENDING_DIR)) {
+        console.log('No pending update directory found');
+        return;
+      }
+
+      const files = fs.readdirSync(UPDATER_PENDING_DIR);
+      const installerFile = files.find(file => file.endsWith('.exe'));
+
+      if (installerFile) {
+        const installerPath = path.join(UPDATER_PENDING_DIR, installerFile);
+        console.log('Installing pending update:', installerPath);
+        
+        // Launch the installer
+        const { spawn } = require('child_process');
+        spawn(installerPath, [], {
+          detached: true,
+          stdio: 'ignore'
+        }).unref();
+        
+        // Force quit the app after a short delay
+        setTimeout(() => {
+          forceQuitApp();
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error installing pending update:', error);
     }
   });
 
@@ -1897,7 +1962,7 @@ function showAboutDialog(): void {
       </div>
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-      <p class="version">Version 1.1.2</p>
+      <p class="version">Version 1.2.1</p>
       <div class="features">
         <p><strong>Quick Shortcuts:</strong></p>
         <ul>
@@ -1925,10 +1990,7 @@ if (!gotTheLock) {
   // This method will be called when Electron has finished
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
-  app.whenReady().then(() => {
-  // Check for pending updates first - if found, install and quit
-  checkAndInstallPendingUpdate();
-  
+  app.whenReady().then(async () => {
   // Check encryption availability after app is ready
   checkEncryptionAvailability();
   
@@ -1936,6 +1998,19 @@ if (!gotTheLock) {
   registerDeepLinkProtocol();
   
   createWindow();
+  
+  // Check for forced auto-update AFTER window is created
+  // This allows us to show the update modal before installing
+  const updateTriggered = await handleAutoUpdate(mainWindow);
+  
+  if (updateTriggered) {
+    // Update is being installed, app will close automatically
+    console.log('Update triggered, app will restart with new version');
+    return; // Don't continue with normal initialization
+  }
+  
+  // No update needed, show the window and continue normal initialization
+  mainWindow.show();
   
   // Initialize Groq client with saved API key (after app is ready so safeStorage is available)
   setTimeout(() => {
