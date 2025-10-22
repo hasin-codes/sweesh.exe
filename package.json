@@ -1,7 +1,7 @@
 {
   "name": "Sweesh",
-  "version": "1.0.2",
-  "description": "Speak it, Send it ",
+  "version": "1.0.3",
+  "description": "Speak it, Send it",
   "main": "dist/main.js",
   "scripts": {
     "start": "electron .",
