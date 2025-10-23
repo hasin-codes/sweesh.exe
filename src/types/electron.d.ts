@@ -40,7 +40,7 @@ export interface ElectronAPI {
   loadTranscriptions: () => Promise<any[]>;
   saveTranscriptions: (transcriptions: any[]) => Promise<{success: boolean}>;
   // Onboarding management
-  checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean, isAuthenticated: boolean}>;
+  checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean, isAuthenticated: boolean, userInfo?: {userId: string, email: string, firstName?: string, lastName?: string, imageUrl?: string, expiresAt?: string}}>;
   completeOnboarding: () => Promise<boolean>;
   clearAllData: () => Promise<{success: boolean, error?: string}>;
   // Authentication methods

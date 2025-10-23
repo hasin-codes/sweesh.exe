@@ -5,9 +5,12 @@ import { Titlebar } from "@/components/layout/titlebar"
 import { Topbar } from "@/components/layout/sidebar"
 import { TranscriptionCard } from "@/components/layout/transcription-card"
 import { SettingsModal } from "@/components/ui/settings-modal"
+import { NotificationModal } from "@/components/ui/notification-modal"
+import { ProfileModal } from "@/components/ui/profile-modal"
 import { TranscriptionModal } from "@/components/ui/transcription-modal"
 import { OnboardingModal } from "@/components/ui/onboarding-modal"
 import { UpdateModal } from "@/components/ui/update-modal"
+import { UpdateRequiredModal } from "@/components/ui/update-required-modal"
 
 interface Transcription {
   id: number
@@ -21,6 +24,8 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [audioLevel, setAudioLevel] = useState(0.1)
   const [showSettings, setShowSettings] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [showTranscriptionModal, setShowTranscriptionModal] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null)
@@ -34,6 +39,34 @@ export default function Home() {
   })
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [updateVersion, setUpdateVersion] = useState('')
+  const [showUpdateRequired, setShowUpdateRequired] = useState(false)
+
+  // Check for pending updates on app start
+  useEffect(() => {
+    const checkForPendingUpdates = async () => {
+      try {
+        if (window.electronAPI && window.electronAPI.checkPendingUpdate) {
+          console.log('🔍 Checking for pending updates...')
+          const hasPending = await window.electronAPI.checkPendingUpdate()
+          if (hasPending) {
+            console.log('✅ Pending update found!')
+            console.log('🔔 Update Required Modal: NEEDED - Showing update required modal for pending update')
+            // Show the update required modal
+            setShowUpdateRequired(true)
+            setUpdateVersion('Latest') // You can get the actual version if needed
+          } else {
+            console.log('ℹ️ No pending updates found')
+            console.log('🔔 Update Required Modal: NOT NEEDED - No pending updates')
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to check for pending updates:', error)
+        console.log('🔔 Update Required Modal: NOT NEEDED - Error checking pending updates')
+      }
+    }
+
+    checkForPendingUpdates()
+  }, [])
 
   // Listen for update-starting event from main process
   useEffect(() => {
@@ -43,6 +76,41 @@ export default function Home() {
         setUpdateVersion(version)
         setShowUpdateModal(true)
       })
+    }
+  }, [])
+
+  // Listen for update status changes from electron-updater
+  useEffect(() => {
+    if (window.electronAPI && window.electronAPI.onUpdateStatus) {
+      const handleUpdateStatus = (data: { status: string; version?: string; error?: string; progress?: any }) => {
+        console.log('📦 Update status changed:', data)
+        
+        if (data.status === 'downloaded' && data.version) {
+          console.log('✅ Update downloaded successfully. Version:', data.version)
+          console.log('🔔 Update Required Modal: NEEDED - Showing update required modal')
+          setUpdateVersion(data.version)
+          setShowUpdateRequired(true)
+        } else if (data.status === 'not-available') {
+          console.log('ℹ️ Update Required Modal: NOT NEEDED - No updates available')
+        } else if (data.status === 'checking') {
+          console.log('🔍 Checking for updates...')
+        } else if (data.status === 'available') {
+          console.log('📥 Update available, downloading...', data)
+        } else if (data.status === 'downloading') {
+          console.log('⬇️ Downloading update...', data.progress)
+        } else if (data.status === 'error') {
+          console.error('❌ Update error:', data.error)
+          console.log('🔔 Update Required Modal: NOT NEEDED - Update error occurred')
+        }
+      }
+
+      window.electronAPI.onUpdateStatus(handleUpdateStatus)
+      
+      return () => {
+        if (window.electronAPI.removeUpdateListener) {
+          window.electronAPI.removeUpdateListener()
+        }
+      }
     }
   }, [])
 
@@ -197,7 +265,8 @@ export default function Home() {
       <Titlebar />
       <Topbar
         onSettings={() => setShowSettings(true)}
-        onAddRecording={addNewTranscription}
+        onNotifications={() => setShowNotifications(true)}
+        onProfile={() => setShowProfile(true)}
       />
 
       {/* Aurora Border Effect */}
@@ -274,6 +343,14 @@ export default function Home() {
         />
       )}
 
+      {/* Update Required Modal */}
+      {showUpdateRequired && (
+        <UpdateRequiredModal 
+          version={updateVersion}
+          onClose={() => setShowUpdateRequired(false)} 
+        />
+      )}
+
       {/* Onboarding Modal */}
       {showOnboarding && (
         <OnboardingModal 
@@ -281,8 +358,14 @@ export default function Home() {
         />
       )}
 
+      {/* Notification Modal */}
+      {showNotifications && <NotificationModal onClose={() => setShowNotifications(false)} />}
+
       {/* Settings Modal */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      {/* Profile Modal */}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
 
       {/* Transcription Modal */}
       {showTranscriptionModal && selectedTranscription && (

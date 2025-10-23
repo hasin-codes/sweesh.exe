@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, clipboard, safeStorage, shell } from 'electron';
 import * as path from 'path';
+import * as url from 'url';
 import { GlobalKeyboardListener } from 'node-global-key-listener';
 import { exec, execFile } from 'child_process';
 import Groq from 'groq-sdk';
@@ -520,7 +521,7 @@ function getAuthStatus(): { isAuthenticated: boolean; user?: any } {
 }
 
 // Onboarding Management Functions
-function checkOnboardingStatus(): { completed: boolean; hasApiKey: boolean; isAuthenticated: boolean } {
+function checkOnboardingStatus(): { completed: boolean; hasApiKey: boolean; isAuthenticated: boolean; userInfo?: any } {
   try {
     let completed = false;
     
@@ -532,6 +533,7 @@ function checkOnboardingStatus(): { completed: boolean; hasApiKey: boolean; isAu
     const hasApiKey = loadApiKeySecurely() !== null;
     const authStatus = getAuthStatus();
     const isAuthenticated = authStatus.isAuthenticated;
+    const userInfo = authStatus.user || undefined;
     
     // Onboarding is only truly complete if user has both auth AND API key
     // Override completed flag if either is missing
@@ -539,7 +541,7 @@ function checkOnboardingStatus(): { completed: boolean; hasApiKey: boolean; isAu
       completed = false;
     }
     
-    return { completed, hasApiKey, isAuthenticated };
+    return { completed, hasApiKey, isAuthenticated, userInfo };
   } catch (error) {
     console.error('Failed to check onboarding status:', error);
     return { completed: false, hasApiKey: false, isAuthenticated: false };
@@ -1848,137 +1850,509 @@ function updateTrayMenu(isStartupEnabled?: boolean): void {
 // Function to show about dialog
 function showAboutDialog(): void {
   const aboutWindow = new BrowserWindow({
-    width: 450,
-    height: 400,
-    resizable: false,
-    modal: true,
-    parent: mainWindow,
+    width: 650,
+    height: 720,
+    minWidth: 400,
+    minHeight: 500,
+    maxHeight: 720,
+    resizable: true,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#0a0a0a',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
-  // Get logo path
-  const logoPath = path.join(__dirname, 'icons', 'logo.png');
-  const logoUrl = `file://${logoPath.replace(/\\/g, '/')}`;
+  // Open external links in browser
+  aboutWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 
-  const aboutHTML = `
-    <!DOCTYPE html>
-    <html>
+  // Get font path - use a web-compatible path
+  const fontPath = path.join(__dirname, 'fonts', 'EditorsNote-Light.otf');
+  const fontUrl = url.pathToFileURL(fontPath).href;
+
+  const aboutHTML = `<!DOCTYPE html>
+<html lang="en">
     <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>About Sweesh</title>
       <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    @font-face {
+      font-family: 'Editors Note';
+      src: url('${fontUrl}') format('opentype');
+      font-weight: 300;
+      font-style: normal;
+    }
+
+    * {
           margin: 0;
-          padding: 30px 20px;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Editors Note', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto Mono', 'Courier New', monospace;
           background: #0a0a0a;
-          color: white;
-          text-align: center;
-        }
-        .logo-container {
-          margin: 0 auto 20px;
-          width: 80px;
-          height: 80px;
+      color: #ffffff;
+      line-height: 1.6;
+      overflow: hidden;
+      -webkit-app-region: no-drag;
+      height: 100vh;
+    }
+
+    /* Custom Titlebar */
+    .titlebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: #0a0a0a;
+      border-bottom: 1px solid #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      -webkit-app-region: drag;
+      z-index: 1000;
+    }
+
+    .titlebar-title {
+      font-size: 13px;
+      color: #888;
+      font-weight: 500;
+    }
+
+    .titlebar-buttons {
+      display: flex;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar-button {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: #888;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .titlebar-button:hover {
+      background: #1a1a1a;
+      color: #ffffff;
+    }
+
+    .titlebar-button.close:hover {
+      background: #ff6b35;
+      color: #ffffff;
+    }
+
+    /* Gradient background accent */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 20% 50%, rgba(255, 107, 53, 0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: min(900px, 95vw);
+      margin: 0 auto;
+      padding: 60px clamp(16px, 4vw, 20px) 20px;
           display: flex;
+      flex-direction: column;
           align-items: center;
-          justify-content: center;
-        }
+      text-align: center;
+      height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
+    /* Custom Scrollbar */
+    .container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .container::-webkit-scrollbar-thumb {
+      background: #2a2a2a;
+      border-radius: 3px;
+      transition: background 0.2s ease;
+    }
+
+    .container::-webkit-scrollbar-thumb:hover {
+      background: #ff6b35;
+    }
+
+    /* Logo Section */
+    .logo-container {
+      margin-bottom: 16px;
+      animation: fadeInDown 0.6s ease-out;
+    }
+
         .logo {
-          width: 80px;
-          height: 80px;
+      width: clamp(60px, 12vw, 70px);
+      height: clamp(60px, 12vw, 70px);
           object-fit: contain;
-          border-radius: 16px;
-        }
-        h1 {
-          margin: 0 0 5px;
-          color: #ff6b35;
-          font-size: 28px;
-          font-weight: 600;
-        }
+      border-radius: clamp(12px, 2.5vw, 16px);
+      border: 2px solid #1a1a1a;
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .logo:hover {
+      transform: translateY(-4px);
+      border-color: #ff6b35;
+    }
+
+    /* Header Section */
+    h1 {
+      font-family: 'Editors Note', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: clamp(28px, 6vw, 36px);
+      font-weight: 300;
+      color: #ffffff;
+      margin-bottom: 8px;
+      letter-spacing: -1px;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
         .tagline {
-          margin: 0 0 20px;
+      font-size: clamp(11px, 2.5vw, 14px);
+      color: #ff6b35;
+      font-weight: 500;
+      letter-spacing: clamp(1px, 0.3vw, 2px);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      animation: fadeInUp 0.6s ease-out 0.2s both;
+    }
+
+    .version-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      font-size: clamp(10px, 2vw, 12px);
           color: #888;
-          font-size: 14px;
-          font-style: italic;
-        }
-        p {
-          margin: 8px 0;
-          color: #ccc;
-          font-size: 14px;
-          line-height: 1.5;
-        }
-        .version {
-          font-size: 13px;
-          color: #888;
-          margin: 15px 0;
-          padding: 8px 16px;
+      font-weight: 500;
+      margin-bottom: 16px;
+      animation: fadeInUp 0.6s ease-out 0.3s both;
+    }
+
+    /* Added author section styling */
+    .author-section {
+          font-size: clamp(11px, 2.5vw, 13px);
+      color: #aaa;
+      margin-bottom: 16px;
+      animation: fadeInUp 0.6s ease-out 0.35s both;
+    }
+
+    .author-section a {
+      color: #ff6b35;
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.3s ease;
+    }
+
+    .author-section a:hover {
+      color: #ff8555;
+    }
+
+    /* Added social links styling */
+    .social-links {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 16px;
+      animation: fadeInUp 0.6s ease-out 0.4s both;
+      flex-wrap: wrap;
+    }
+
+    .social-links a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
           background: #1a1a1a;
-          border-radius: 6px;
-          display: inline-block;
-        }
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #888;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .social-links a:hover {
+      background: #ff6b35;
+      border-color: #ff6b35;
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+
+    .social-links svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Features Section */
         .features {
-          margin: 20px 0;
-          padding: 15px;
-          background: #141414;
-          border-radius: 8px;
+      background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
           text-align: left;
-        }
+      animation: fadeInUp 0.6s ease-out 0.5s both;
+      backdrop-filter: blur(10px);
+      width: 100%;
+    }
+
+    .features h3 {
+      font-size: clamp(13px, 2.8vw, 14px);
+      color: #ffffff;
+      margin-bottom: 10px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .features h3::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      background: #ff6b35;
+      border-radius: 50%;
+    }
+
         .features ul {
-          margin: 10px 0;
-          padding-left: 20px;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .features li {
+      padding: 4px 0;
           color: #aaa;
-          font-size: 13px;
-        }
-        .features li {
-          margin: 5px 0;
-        }
+          font-size: clamp(10px, 2.2vw, 12px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .features li::before {
+      content: '→';
+      color: #ff6b35;
+      font-weight: bold;
+      min-width: 16px;
+    }
+
+    .features strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    /* Description */
+    .description {
+      font-size: clamp(12px, 2.5vw, 13px);
+      color: #bbb;
+      margin-bottom: 16px;
+      max-width: min(600px, 95%);
+      animation: fadeInUp 0.6s ease-out 0.6s both;
+      line-height: 1.6;
+    }
+
+    /* Copyright Section */
+    .copyright-section {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      text-align: left;
+      animation: fadeInUp 0.6s ease-out 0.7s both;
+      max-width: min(700px, 95%);
+      width: 100%;
+    }
+
+    .copyright-section h2 {
+      font-size: clamp(11px, 2.5vw, 12px);
+      color: #ff6b35;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .copyright-text {
+      font-size: clamp(10px, 2.2vw, 11px);
+      color: #999;
+      line-height: 1.6;
+      font-family: 'Courier New', monospace;
+    }
+
+    .copyright-text strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    /* Button */
         .close-btn {
-          margin-top: 20px;
-          padding: 10px 24px;
+      padding: 8px 24px;
           background: #ff6b35;
-          color: white;
+      color: #ffffff;
           border: none;
           border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 500;
-          transition: background 0.2s;
-        }
+          font-size: clamp(11px, 2.5vw, 12px);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      letter-spacing: 0.5px;
+      animation: fadeInUp 0.6s ease-out 0.8s both;
+    }
+
         .close-btn:hover {
           background: #ff8555;
-        }
-        .footer {
-          margin-top: 20px;
-          font-size: 12px;
-          color: #666;
-        }
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
+    }
+
+    .close-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Animations */
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
       </style>
     </head>
     <body>
+  <!-- Custom Titlebar -->
+  <div class="titlebar">
+    <div class="titlebar-title">About Sweesh</div>
+    <div class="titlebar-buttons">
+      <button class="titlebar-button close" onclick="window.close()" title="Close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="container">
       <div class="logo-container">
-        <img src="${logoUrl}" alt="Sweesh Logo" class="logo">
+      <img src="https://raw.githubusercontent.com/hasin-codes/sweesh.exe/main/public/icons/logo.svg" alt="Sweesh Logo" class="logo">
       </div>
+
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-      <p class="version">Version 1.3.0</p>
+    <p class="version-badge">Version 1.3.9</p>
+
+    <!-- Added author section with link -->
+    <p class="author-section">
+      Created by <a href="https://hasin.vercel.app" target="_blank" rel="noopener noreferrer">Hasin Raiyan</a>
+    </p>
+
+    <!-- Added social media links -->
+    <div class="social-links">
+      <a href="https://x.com/hasin_innit" target="_blank" rel="noopener noreferrer" title="X/Twitter" aria-label="X/Twitter">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M10.488 14.651L15.25 21h7l-7.858-10.478L20.93 3h-2.65l-5.117 5.886L8.75 3h-7l7.51 10.015L2.32 21h2.65zM16.25 19L5.75 5h2l10.5 14z"></path></svg>
+      </a>
+      <a href="https://www.linkedin.com/in/hasin-raiyan/" target="_blank" rel="noopener noreferrer" title="LinkedIn" aria-label="LinkedIn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93zM6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37z"></path></svg>
+      </a>
+      <a href="https://www.facebook.com/hasin.innit" target="_blank" rel="noopener noreferrer" title="Facebook" aria-label="Facebook">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95"></path></svg>
+      </a>
+      <a href="https://www.instagram.com/hasin_productions/" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8a3.6 3.6 0 0 0 3.6 3.6h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6a3.6 3.6 0 0 0-3.6-3.6zm4.4 2a4.4 4.4 0 1 1 0 8.8a4.4 4.4 0 0 1 0-8.8m0 2a2.4 2.4 0 1 0 0 4.8a2.4 2.4 0 0 0 0-4.8m5.5-1a1 1 0 1 1 0 2a1 1 0 0 1 0-2"></path></svg>
+      </a>
+    </div>
+
       <div class="features">
-        <p><strong>Quick Shortcuts:</strong></p>
-        <ul>
-          <li>Hold <strong>Ctrl+Shift+M</strong> to record</li>
-          <li>Hold <strong>Alt+Shift+M</strong> to record</li>
-          <li>Hold <strong>F12</strong> to record</li>
+      <h3>Quick Shortcuts</h3>
+      <ul>
+        <li><strong>Ctrl+Shift+M</strong></li>
+        <li><strong>Alt+Shift+M</strong></li>
         </ul>
       </div>
-      <p>Professional voice transcription powered by Groq Whisper</p>
-      <p class="footer">© 2025 Sweesh. Made with ❤️ by Hasin Raiyan</p>
-      <button class="close-btn" onclick="window.close()">Close</button>
-    </body>
-    </html>
-  `;
 
-  aboutWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(aboutHTML)}`);
+    <p class="description">A Gnostic Product</p>
+
+    <div class="copyright-section">
+      <h2>© Copyright & License</h2>
+      <p class="copyright-text">
+        <strong>Copyright (c) 2025 Hasin Raiyan. All rights reserved.</strong><br><br>
+        This software and associated documentation files (the "Software") are the property of Hasin Raiyan. Unauthorized copying, modification, distribution, or use of the Software, via any medium, is strictly prohibited.<br><br>
+        Commercial, personal, or educational use requires explicit written permission from the author.
+      </p>
+    </div>
+
+      <button class="close-btn" onclick="window.close()">Close</button>
+  </div>
+    </body>
+</html>`;
+
+  // Write HTML to a temporary file to ensure proper font and resource loading
+  const tempDir = app.getPath('temp');
+  const aboutFilePath = path.join(tempDir, 'sweesh-about.html');
+  
+  try {
+    fs.writeFileSync(aboutFilePath, aboutHTML, 'utf-8');
+    aboutWindow.loadFile(aboutFilePath);
+    
+    // Clean up the temp file when window is closed
+    aboutWindow.on('closed', () => {
+      try {
+        if (fs.existsSync(aboutFilePath)) {
+          fs.unlinkSync(aboutFilePath);
+        }
+      } catch (err) {
+        console.error('Failed to clean up about file:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Failed to create about window:', error);
+    aboutWindow.close();
+  }
 }
 
 // Prevent multiple instances of the app

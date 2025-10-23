@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface SettingsModalProps {
   onClose: () => void
@@ -152,13 +153,54 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/20 settings-modal-backdrop" onClick={onClose} />
+  // Modal animation variants
+  const backdropVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1 }
+  }
 
-      {/* Modal */}
-      <div className="relative rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" style={{ backgroundColor: '#171717' }}>
+  const modalVariants = {
+    hidden: { opacity: 0, scale: 0.95, y: -20 },
+    visible: { 
+      opacity: 1, 
+      scale: 1, 
+      y: 0,
+      transition: { 
+        duration: 0.2
+      }
+    },
+    exit: { 
+      opacity: 0, 
+      scale: 0.95, 
+      y: -20,
+      transition: { 
+        duration: 0.2
+      }
+    }
+  }
+
+  return (
+    <AnimatePresence mode="wait">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <motion.div 
+          className="absolute inset-0 bg-black/20" 
+          variants={backdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          onClick={onClose}
+        />
+
+        {/* Modal */}
+        <motion.div 
+          className="relative rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" 
+          style={{ backgroundColor: '#171717' }}
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
           <h2 className="text-lg font-semibold text-white">Settings</h2>
@@ -313,7 +355,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             {toast.message}
           </div>
         )}
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   )
 }

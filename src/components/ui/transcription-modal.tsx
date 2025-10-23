@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface TranscriptionModalProps {
   isOpen: boolean
@@ -24,6 +25,32 @@ export function TranscriptionModal({
 }: TranscriptionModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedText, setEditedText] = useState(transcription.text)
+
+  // Modal animation variants
+  const backdropVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1 }
+  }
+
+  const modalVariants = {
+    hidden: { opacity: 0, scale: 0.95, y: -20 },
+    visible: { 
+      opacity: 1, 
+      scale: 1, 
+      y: 0,
+      transition: { 
+        duration: 0.2
+      }
+    },
+    exit: { 
+      opacity: 0, 
+      scale: 0.95, 
+      y: -20,
+      transition: { 
+        duration: 0.2
+      }
+    }
+  }
 
   const handleCopy = async () => {
     try {
@@ -59,15 +86,24 @@ export function TranscriptionModal({
   if (!isOpen) return null
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div 
-        className="rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
-        style={{ backgroundColor: '#171717' }}
-        onClick={(e) => e.stopPropagation()}
+    <AnimatePresence mode="wait">
+      <motion.div 
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        variants={backdropVariants}
+        initial="hidden"
+        animate="visible"
+        exit="hidden"
+        onClick={onClose}
       >
+        <motion.div 
+          className="rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
+          style={{ backgroundColor: '#171717' }}
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header with gradient matching transcription card */}
         <div
           className="w-full h-24 rounded-t-lg border-b border-border"
@@ -82,13 +118,13 @@ export function TranscriptionModal({
             </div>
             <div className="flex items-center gap-1">
               <button 
-                className="h-8 px-3 text-xs bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-md font-medium flex items-center gap-1.5 transition-colors"
+                className="h-8 px-2 text-xs bg-gray-500/10 hover:bg-gray-500/20 text-white rounded font-medium flex items-center justify-center transition-colors"
                 onClick={handleCopy}
+                title="Copy to clipboard"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                Copy
               </button>
               {!isEditing ? (
                 <button 
@@ -112,13 +148,13 @@ export function TranscriptionModal({
                 </button>
               )}
               <button 
-                className="h-8 px-3 text-xs bg-red-500/20 hover:bg-red-500/30 text-white border border-red-500/30 rounded-md font-medium flex items-center gap-1.5 transition-colors"
+                className="h-8 px-2 text-xs bg-gray-500/10 hover:bg-gray-500/20 text-white rounded font-medium flex items-center justify-center transition-colors"
                 onClick={handleDelete}
+                title="Delete transcription"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
-                Delete
               </button>
             </div>
           </div>
@@ -163,7 +199,8 @@ export function TranscriptionModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   )
 }
