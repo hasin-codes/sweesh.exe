@@ -151,7 +151,7 @@ export function UpdateRequiredModal({ version, onClose }: UpdateRequiredModalPro
 
           {/* Instruction text */}
           <p className="text-center text-sm text-white leading-relaxed mb-6">
-            After exiting Sweesh from the system tray <span className="font-semibold" style={{ color: '#ff8c42' }}>(Step 2)</span>, go to the opened directory
+            After exiting Sweesh from the system tray <span className="font-semibold" style={{ color: '#ff8c42' }}>(Step 4)</span>, go to the opened directory
             <br />
             and run the latest <span className="font-semibold" style={{ color: '#ff8c42' }}>Sweesh-Setup</span> to install the update.
           </p>
