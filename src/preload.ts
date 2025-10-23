@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Onboarding management
   checkOnboardingStatus: () => ipcRenderer.invoke('check-onboarding-status'),
   completeOnboarding: () => ipcRenderer.invoke('complete-onboarding'),
+  skipOnboarding: () => ipcRenderer.invoke('skip-onboarding'),
   clearAllData: () => ipcRenderer.invoke('clear-all-data'),
   // Authentication methods
   getAuthStatus: () => ipcRenderer.invoke('get-auth-status'),
@@ -68,22 +69,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('auth-success');
     ipcRenderer.removeAllListeners('auth-error');
   },
-  // Auto-Update methods
-  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-  quitAndInstallUpdate: () => ipcRenderer.invoke('quit-and-install-update'),
-  onUpdateStatus: (callback: (data: any) => void) => {
-    ipcRenderer.on('update-status', (event, data) => callback(data));
-  },
-  removeUpdateListener: () => {
-    ipcRenderer.removeAllListeners('update-status');
-  },
   // External links
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
-  // Pending updates
+  // Pending update check (non-intrusive)
   checkPendingUpdate: () => ipcRenderer.invoke('check-pending-update'),
-  installPendingUpdate: () => ipcRenderer.invoke('install-pending-update'),
-  // Update modal event
-  onUpdateStarting: (callback: (version: string) => void) => {
-    ipcRenderer.on('update-starting', (event, version) => callback(version));
-  }
+  openPendingDirectory: () => ipcRenderer.invoke('open-pending-directory')
 });

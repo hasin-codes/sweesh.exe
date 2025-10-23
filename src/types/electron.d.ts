@@ -42,6 +42,7 @@ export interface ElectronAPI {
   // Onboarding management
   checkOnboardingStatus: () => Promise<{completed: boolean, hasApiKey: boolean, isAuthenticated: boolean, userInfo?: {userId: string, email: string, firstName?: string, lastName?: string, imageUrl?: string, expiresAt?: string}}>;
   completeOnboarding: () => Promise<boolean>;
+  skipOnboarding: () => Promise<boolean>;
   clearAllData: () => Promise<{success: boolean, error?: string}>;
   // Authentication methods
   getAuthStatus: () => Promise<{isAuthenticated: boolean, user?: any}>;
@@ -51,18 +52,11 @@ export interface ElectronAPI {
   onAuthSuccess: (callback: (userData: any) => void) => void;
   onAuthError: (callback: (error: string) => void) => void;
   removeAuthListeners: () => void;
-  // Auto-Update methods
-  checkForUpdates: () => Promise<{success: boolean, updateInfo?: any, error?: string}>;
-  quitAndInstallUpdate: () => Promise<{success: boolean, error?: string}>;
-  onUpdateStatus: (callback: (data: {status: string, version?: string, error?: string, progress?: any}) => void) => void;
-  removeUpdateListener: () => void;
   // External links
   openExternal: (url: string) => Promise<void>;
-  // Pending updates
-  checkPendingUpdate: () => Promise<boolean>;
-  installPendingUpdate: () => Promise<void>;
-  // Update modal event
-  onUpdateStarting: (callback: (version: string) => void) => void;
+  // Pending update check (non-intrusive)
+  checkPendingUpdate: () => Promise<{hasUpdate: boolean, version?: string, filename?: string, currentVersion?: string, installerVersion?: string}>;
+  openPendingDirectory: () => Promise<{success: boolean, path?: string, error?: string}>;
 }
 
 declare global {

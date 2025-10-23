@@ -8,10 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
-import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
 import jwksClient from 'jwks-rsa';
-import { handleAutoUpdate } from './main/autoUpdater';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -46,48 +43,13 @@ function loadEnvFromFile(): void {
 // Load env before initializing API clients
 loadEnvFromFile();
 
-// Configure auto-updater logging
-log.transports.file.level = 'info';
-autoUpdater.logger = log;
-
-// Path to pending updates
-const UPDATER_PENDING_DIR = path.join(app.getPath('userData'), '..', 'sweesh-updater', 'pending');
-
-// Function to check for and install pending updates on startup
-function checkAndInstallPendingUpdate(): void {
-  try {
-    if (!fs.existsSync(UPDATER_PENDING_DIR)) {
-      console.log('No pending update directory found');
-      return;
-    }
-
-    // Look for any .exe files in the pending directory
-    const files = fs.readdirSync(UPDATER_PENDING_DIR);
-    const installerFile = files.find(file => file.endsWith('.exe'));
-
-    if (installerFile) {
-      const installerPath = path.join(UPDATER_PENDING_DIR, installerFile);
-      console.log('Found pending installer:', installerPath);
-      
-      // Launch the installer
-      console.log('Launching installer and quitting app...');
-      
-      // Use spawn to launch the installer without waiting
-      const { spawn } = require('child_process');
-      spawn(installerPath, [], {
-        detached: true,
-        stdio: 'ignore'
-      }).unref();
-      
-      // Force quit the app immediately
-      setTimeout(() => {
-        app.exit(0);
-      }, 500);
-    } else {
-      console.log('No installer file found in pending directory');
-    }
-  } catch (error) {
-    console.error('Error checking for pending updates:', error);
+// Function to get the pending updates directory path
+// Use Local AppData instead of Roaming on Windows
+function getUpdaterPendingDir(): string {
+  if (process.platform === 'win32') {
+    return path.join(os.homedir(), 'AppData', 'Local', 'sweesh-updater', 'pending');
+  } else {
+    return path.join(app.getPath('userData'), '..', 'sweesh-updater', 'pending');
   }
 }
 
@@ -117,89 +79,7 @@ function forceQuitApp(): void {
   }
 }
 
-// Auto-updater configuration
-function setupAutoUpdater(): void {
-  // Configure auto-updater
-  // In development: completely disabled, use pending directory check instead
-  // In production: enable both checking and auto-download
-  if (process.env.NODE_ENV === 'development') {
-    log.info('Auto-updater in development mode: disabled. Use pending directory check instead.');
-  } else {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    log.info('Auto-updater in production mode: fully enabled');
-  }
-
-  // Auto-updater events
-  autoUpdater.on('checking-for-update', () => {
-    log.info('Checking for updates...');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-status', { status: 'checking' });
-    }
-  });
-
-  autoUpdater.on('update-available', (info) => {
-    log.info('Update available:', info);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-status', { 
-        status: 'available', 
-        version: info.version 
-      });
-    }
-  });
-
-  autoUpdater.on('update-not-available', (info) => {
-    log.info('Update not available:', info);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-status', { status: 'not-available' });
-    }
-  });
-
-  autoUpdater.on('error', (err) => {
-    log.error('Error in auto-updater:', err);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-status', { 
-        status: 'error', 
-        error: err.message 
-      });
-    }
-  });
-
-  autoUpdater.on('download-progress', (progressObj) => {
-    const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
-    log.info(logMessage);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-status', { 
-        status: 'downloading', 
-        progress: progressObj 
-      });
-    }
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    log.info('Update downloaded:', info);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-status', { 
-        status: 'downloaded', 
-        version: info.version 
-      });
-    }
-  });
-
-  // Check for updates on app start (after a short delay)
-  // Only check for updates in production mode
-  // In development, use the manual pending directory check instead
-  if (process.env.NODE_ENV !== 'development') {
-    setTimeout(() => {
-      log.info('Starting auto-update check...');
-      autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-        log.error('Failed to check for updates:', error);
-      });
-    }, 3000); // 3 second delay to let the app initialize
-  } else {
-    log.info('Development mode: Skipping auto-update check. Use pending directory check instead.');
-  }
-}
+// Auto-updater removed - using only pending directory check with version comparison
 
 let mainWindow: BrowserWindow;
 let activeWindow: BrowserWindow;
@@ -1144,49 +1024,7 @@ function createWindow(): void {
     }
   });
 
-  // Auto-Update IPC Handlers
-  ipcMain.handle('check-for-updates', async () => {
-    // In development mode, skip auto-updater and rely on pending directory check
-    if (process.env.NODE_ENV === 'development') {
-      log.info('Development mode: Skipping auto-updater check. Use pending directory check instead.');
-      return { success: false, error: 'Auto-updater disabled in development mode. Use pending directory check.' };
-    }
-    
-    try {
-      const result = await autoUpdater.checkForUpdates();
-      return { success: true, updateInfo: result?.updateInfo };
-    } catch (error) {
-      log.error('Manual update check failed:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  });
-
-  ipcMain.handle('quit-and-install-update', () => {
-    try {
-      // Close all windows first
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) {
-          win.destroy();
-        }
-      });
-      
-      // Cleanup listeners
-      if (keyListener) {
-        keyListener.kill();
-      }
-      globalShortcut.unregisterAll();
-      
-      // Use setImmediate to ensure cleanup completes before quitting
-      setImmediate(() => {
-        autoUpdater.quitAndInstall(false, true);
-      });
-      
-      return { success: true };
-    } catch (error) {
-      log.error('Failed to install update:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  });
+  // Auto-updater IPC handlers removed - using only pending directory check
 
   // Persistence IPC Handlers
   ipcMain.handle('load-transcriptions', () => {
@@ -1222,55 +1060,96 @@ function createWindow(): void {
     }
   });
 
-  // Pending update handlers
+  // Pending update check (non-intrusive, compares versions)
   ipcMain.handle('check-pending-update', () => {
     try {
+      const currentVersion = app.getVersion();
+      const UPDATER_PENDING_DIR = getUpdaterPendingDir();
+      console.log('🔍 Checking for pending updates...');
+      console.log('📌 Current app version:', currentVersion);
+      
       if (!fs.existsSync(UPDATER_PENDING_DIR)) {
-        return false;
+        console.log('📂 No pending update directory found');
+        console.log('🔔 Update Required Modal: NOT NEEDED - No directory');
+        return { hasUpdate: false, currentVersion };
       }
 
       const files = fs.readdirSync(UPDATER_PENDING_DIR);
-      const hasInstaller = files.some(file => file.endsWith('.exe'));
+      console.log('📂 Files in pending directory:', files.length > 0 ? files.join(', ') : 'none');
       
-      if (hasInstaller) {
-        console.log('Pending update detected:', files.find(f => f.endsWith('.exe')));
+      // Only match files with pattern: Sweesh-Setup-x.x.x.exe (not temp or partial downloads)
+      const installerFile = files.find(file => {
+        const match = file.match(/^Sweesh-Setup-\d+\.\d+\.\d+\.exe$/i);
+        return match !== null;
+      });
+      
+      if (installerFile) {
+        console.log('📦 Valid installer file found:', installerFile);
+        
+        // Parse version from filename
+        const versionMatch = installerFile.match(/(\d+\.\d+\.\d+)/);
+        const installerVersion = versionMatch ? versionMatch[1] : null;
+        
+        if (!installerVersion) {
+          console.log('❌ Could not parse version from filename');
+          console.log('🔔 Update Required Modal: NOT NEEDED - Invalid version format');
+          return { hasUpdate: false, currentVersion };
+        }
+        
+        console.log('📦 Installer version:', installerVersion);
+        
+        // Compare versions using semver
+        const semver = require('semver');
+        const isNewer = semver.gt(installerVersion, currentVersion);
+        
+        console.log('🔍 Version comparison:');
+        console.log('   Current:', currentVersion);
+        console.log('   Installer:', installerVersion);
+        console.log('   Is installer newer?', isNewer);
+        
+        if (isNewer) {
+          console.log('✅ NEWER version found in directory!');
+          console.log('🔔 Update Required Modal: NEEDED - Installer is newer');
+          return { 
+            hasUpdate: true, 
+            version: installerVersion,
+            currentVersion: currentVersion,
+            filename: installerFile 
+          };
+        } else {
+          console.log('ℹ️ Installer version is not newer than current version');
+          console.log('🔔 Update Required Modal: NOT NEEDED - Same or older version');
+          return { hasUpdate: false, currentVersion, installerVersion };
+        }
       }
       
-      return hasInstaller;
+      console.log('📂 No valid installer file found (only Sweesh-Setup-x.x.x.exe pattern accepted)');
+      console.log('🔔 Update Required Modal: NOT NEEDED - No valid installer');
+      return { hasUpdate: false, currentVersion };
     } catch (error) {
-      console.error('Error checking for pending update:', error);
-      return false;
+      console.error('❌ Error checking for pending update:', error);
+      console.log('🔔 Update Required Modal: NOT NEEDED - Error occurred');
+      return { hasUpdate: false };
     }
   });
 
-  ipcMain.handle('install-pending-update', () => {
+  // Open pending updates directory in file explorer
+  ipcMain.handle('open-pending-directory', async () => {
     try {
+      const UPDATER_PENDING_DIR = getUpdaterPendingDir();
+      // Create directory if it doesn't exist
       if (!fs.existsSync(UPDATER_PENDING_DIR)) {
-        console.log('No pending update directory found');
-        return;
+        fs.mkdirSync(UPDATER_PENDING_DIR, { recursive: true });
+        console.log('📂 Created pending updates directory');
       }
-
-      const files = fs.readdirSync(UPDATER_PENDING_DIR);
-      const installerFile = files.find(file => file.endsWith('.exe'));
-
-      if (installerFile) {
-        const installerPath = path.join(UPDATER_PENDING_DIR, installerFile);
-        console.log('Installing pending update:', installerPath);
-        
-        // Launch the installer
-        const { spawn } = require('child_process');
-        spawn(installerPath, [], {
-          detached: true,
-          stdio: 'ignore'
-        }).unref();
-        
-        // Force quit the app after a short delay
-        setTimeout(() => {
-          forceQuitApp();
-        }, 500);
-      }
+      
+      // Open directory in file explorer
+      await shell.openPath(UPDATER_PENDING_DIR);
+      console.log('📂 Opened pending updates directory:', UPDATER_PENDING_DIR);
+      return { success: true, path: UPDATER_PENDING_DIR };
     } catch (error) {
-      console.error('Error installing pending update:', error);
+      console.error('❌ Failed to open pending directory:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });
 
@@ -2373,26 +2252,7 @@ if (!gotTheLock) {
   
   createWindow();
   
-  // Wait for window to be ready before checking for updates
-  await new Promise<void>((resolve) => {
-    if (mainWindow.webContents.isLoading()) {
-      mainWindow.webContents.once('did-finish-load', () => resolve());
-    } else {
-      resolve();
-    }
-  });
-  
-  // Check for forced auto-update AFTER window is ready
-  // This allows us to show the update modal before installing
-  const updateTriggered = await handleAutoUpdate(mainWindow);
-  
-  if (updateTriggered) {
-    // Update is being installed, app will close automatically
-    console.log('Update triggered, app will restart with new version');
-    return; // Don't continue with normal initialization
-  }
-  
-  // No update needed, show the window and continue normal initialization
+  // Show the window
   mainWindow.show();
   
   // Initialize Groq client with saved API key (after app is ready so safeStorage is available)
@@ -2417,8 +2277,7 @@ if (!gotTheLock) {
     }
   }, 1500); // Wait for window to be ready to receive messages
   
-  // Setup auto-updater to check for updates on app start
-  setupAutoUpdater();
+  // Auto-updater removed - using only pending directory check
   
   // Wait a bit for the window to be ready
   setTimeout(() => {

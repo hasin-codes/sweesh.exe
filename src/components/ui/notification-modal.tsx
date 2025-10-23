@@ -19,50 +19,6 @@ interface Notification {
 
 export function NotificationModal({ onClose }: NotificationModalProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [hasPendingUpdate, setHasPendingUpdate] = useState(false)
-
-  useEffect(() => {
-    // Load notifications and check for pending updates
-    loadNotifications()
-  }, [])
-
-  const loadNotifications = async () => {
-    try {
-      // Check for pending updates
-      if (window.electronAPI && window.electronAPI.checkPendingUpdate) {
-        const hasPending = await window.electronAPI.checkPendingUpdate()
-        setHasPendingUpdate(hasPending)
-        
-        // Add update notification if there's a pending update
-        if (hasPending) {
-          const updateNotification: Notification = {
-            id: Date.now(),
-            type: 'update',
-            title: 'Update Available',
-            message: 'A new version of Sweesh is ready to install.',
-            timestamp: new Date().toLocaleString(),
-            read: false
-          }
-          setNotifications([updateNotification])
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load notifications:', error)
-    }
-  }
-
-  const handleInstallUpdate = async () => {
-    if (hasPendingUpdate) {
-      const confirmInstall = confirm('A new update is ready to install. The app will close and install the update. Continue?')
-      if (confirmInstall) {
-        try {
-          await window.electronAPI.installPendingUpdate()
-        } catch (error) {
-          console.error('Failed to install update:', error)
-        }
-      }
-    }
-  }
 
   const markAsRead = (id: number) => {
     setNotifications(prev => 
@@ -202,14 +158,6 @@ export function NotificationModal({ onClose }: NotificationModalProps) {
                             {notification.timestamp}
                           </span>
                           <div className="flex items-center gap-2">
-                            {notification.type === 'update' && !notification.read && (
-                              <button
-                                onClick={handleInstallUpdate}
-                                className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
-                              >
-                                Install Now
-                              </button>
-                            )}
                             {!notification.read && (
                               <button
                                 onClick={() => markAsRead(notification.id)}

@@ -14,27 +14,6 @@ interface TopbarProps {
 export function Topbar({ onSettings, onNotifications, onProfile }: TopbarProps) {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
 
-  useEffect(() => {
-    // Check for unread notifications on mount
-    checkForUnreadNotifications()
-
-    // Check periodically every 30 seconds
-    const interval = setInterval(checkForUnreadNotifications, 30000)
-
-    return () => clearInterval(interval)
-  }, [])
-
-  const checkForUnreadNotifications = async () => {
-    try {
-      if (window.electronAPI && window.electronAPI.checkPendingUpdate) {
-        const hasPending = await window.electronAPI.checkPendingUpdate()
-        setHasUnreadNotifications(hasPending)
-      }
-    } catch (error) {
-      console.error('Failed to check for unread notifications:', error)
-    }
-  }
-
   return (
     <aside 
       data-topbar

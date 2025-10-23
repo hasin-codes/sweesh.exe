@@ -41,22 +41,24 @@ export default function Home() {
   const [updateVersion, setUpdateVersion] = useState('')
   const [showUpdateRequired, setShowUpdateRequired] = useState(false)
 
-  // Check for pending updates on app start
+  // Check for pending updates on app start (non-intrusive, just shows modal)
   useEffect(() => {
     const checkForPendingUpdates = async () => {
       try {
         if (window.electronAPI && window.electronAPI.checkPendingUpdate) {
-          console.log('🔍 Checking for pending updates...')
-          const hasPending = await window.electronAPI.checkPendingUpdate()
-          if (hasPending) {
-            console.log('✅ Pending update found!')
-            console.log('🔔 Update Required Modal: NEEDED - Showing update required modal for pending update')
+          console.log('🔍 Checking for pending updates in directory...')
+          const result = await window.electronAPI.checkPendingUpdate()
+          if (result.hasUpdate) {
+            console.log('✅ Pending update found in directory!')
+            console.log('📦 Version:', result.version)
+            console.log('📦 Filename:', result.filename)
+            console.log('🔔 Update Required Modal: NEEDED - Showing update required modal (non-intrusive)')
             // Show the update required modal
             setShowUpdateRequired(true)
-            setUpdateVersion('Latest') // You can get the actual version if needed
+            setUpdateVersion(result.version || 'Latest')
           } else {
-            console.log('ℹ️ No pending updates found')
-            console.log('🔔 Update Required Modal: NOT NEEDED - No pending updates')
+            console.log('ℹ️ No pending updates found in directory')
+            console.log('🔔 Update Required Modal: NOT NEEDED - No pending updates in directory')
           }
         }
       } catch (error) {
@@ -68,51 +70,7 @@ export default function Home() {
     checkForPendingUpdates()
   }, [])
 
-  // Listen for update-starting event from main process
-  useEffect(() => {
-    if (window.electronAPI && window.electronAPI.onUpdateStarting) {
-      window.electronAPI.onUpdateStarting((version: string) => {
-        console.log('🔄 Update starting:', version)
-        setUpdateVersion(version)
-        setShowUpdateModal(true)
-      })
-    }
-  }, [])
-
-  // Listen for update status changes from electron-updater
-  useEffect(() => {
-    if (window.electronAPI && window.electronAPI.onUpdateStatus) {
-      const handleUpdateStatus = (data: { status: string; version?: string; error?: string; progress?: any }) => {
-        console.log('📦 Update status changed:', data)
-        
-        if (data.status === 'downloaded' && data.version) {
-          console.log('✅ Update downloaded successfully. Version:', data.version)
-          console.log('🔔 Update Required Modal: NEEDED - Showing update required modal')
-          setUpdateVersion(data.version)
-          setShowUpdateRequired(true)
-        } else if (data.status === 'not-available') {
-          console.log('ℹ️ Update Required Modal: NOT NEEDED - No updates available')
-        } else if (data.status === 'checking') {
-          console.log('🔍 Checking for updates...')
-        } else if (data.status === 'available') {
-          console.log('📥 Update available, downloading...', data)
-        } else if (data.status === 'downloading') {
-          console.log('⬇️ Downloading update...', data.progress)
-        } else if (data.status === 'error') {
-          console.error('❌ Update error:', data.error)
-          console.log('🔔 Update Required Modal: NOT NEEDED - Update error occurred')
-        }
-      }
-
-      window.electronAPI.onUpdateStatus(handleUpdateStatus)
-      
-      return () => {
-        if (window.electronAPI.removeUpdateListener) {
-          window.electronAPI.removeUpdateListener()
-        }
-      }
-    }
-  }, [])
+  // Electron-updater listener removed - using only pending directory check
 
   // Listen for toast notifications from main process
   useEffect(() => {

@@ -19,10 +19,10 @@
 ## 🔧 Technical Improvements
 
 ### Enhanced Update Detection System
-- **Real-time Monitoring**: Added comprehensive `onUpdateStatus` listener for electron-updater events
-- **Smart Modal Triggering**: Automatically shows update modal when download completes
-- **Pending Update Detection**: Checks for pending updates on app startup
-- **Dual Update Flow**: Supports both electron-updater and pending directory methods
+- **Simplified Update Flow**: Removed electron-updater dependency for reliability
+- **Pending Directory Detection**: Checks for pending updates in dedicated folder on app startup
+- **Version Comparison**: Uses semver to compare installer version with current app version
+- **Smart Modal Triggering**: Automatically shows update modal only when newer version is detected
 
 ### Developer Experience
 - **Comprehensive Console Logging**: Emoji-prefixed logs for easy debugging
@@ -40,8 +40,9 @@
 - Faster build and deployment times
 
 ## 🐛 Bug Fixes
-- Fixed update modal not showing when updates were downloaded
-- Improved electron-updater event handling
+- **CRITICAL**: Removed orphaned auto-updater methods from preload.ts and electron.d.ts that prevented app startup
+- Fixed IPC handler mismatch between main process and renderer process
+- Added missing `skipOnboarding` method to preload bridge
 - Enhanced error handling for update failures
 - Better window state validation before update operations
 
@@ -52,12 +53,13 @@
 - `src/components/ui/update-required-modal.tsx` - Complete redesign with new UI
 - `src/renderer/App.tsx` - Enhanced update detection and console logging
 - `src/components/layout/sidebar.tsx` - UI improvements
-- `src/components/layout/titlebar.tsx` - Enhanced titlebar
-- `src/components/layout/transcription-card.tsx` - Card improvements
+- `src/components/ui/notification-modal.tsx` - Notification system implementation
 - `src/components/ui/settings-modal.tsx` - Settings enhancements
 - `src/components/ui/transcription-modal.tsx` - Modal improvements
-- `src/main.ts` - Update logic improvements
-- `src/types/electron.d.ts` - Type definitions updates
+- `src/main.ts` - Update logic improvements, removed auto-updater
+- `src/preload.ts` - **FIXED**: Removed orphaned auto-updater methods, added skipOnboarding
+- `src/types/electron.d.ts` - **FIXED**: Updated type definitions to match actual IPC handlers
+- `RELEASE_NOTES_v1.3.9.md` - Updated to reflect actual changes
 
 ### New Files Added
 - `src/components/ui/notification-modal.tsx` - New notification system
