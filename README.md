@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="public/icons/logo.png" alt="Sweesh Logo" width="64" height="64">
-  <h3>Professional Voice Transcription Made Simple</h3>
+  <h3>Voice Transcription Made Simple</h3>
   <p>An elegant Electron-based desktop application for real-time voice transcription with automatic clipboard integration and beautiful visual effects.</p>
 </div>
 
