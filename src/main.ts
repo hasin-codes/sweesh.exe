@@ -9,6 +9,8 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
+import { rateLimiters, checkRateLimit, DeduplicationTracker } from './lib/rateLimiter';
+import { securityLogger } from './lib/securityLogger';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -618,6 +620,7 @@ function createWindow(): void {
   });
 
   // Set Content Security Policy headers
+  // Note: For production, consider implementing nonces or building without inline scripts
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -625,19 +628,43 @@ function createWindow(): void {
         'Content-Security-Policy': [
           [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline'", // unsafe-inline needed for React
-            "style-src 'self' 'unsafe-inline'",  // unsafe-inline needed for styled components
+            // Script CSP: unsafe-inline limited by unsafe-eval removed, strict-dynamic could be added in future
+            "script-src 'self' 'unsafe-inline'",
+            // Style CSP: unsafe-inline needed for React styled-components, but restricted to self
+            "style-src 'self' 'unsafe-inline'",
+            // Image sources: limited to self, data URIs, and HTTPS only
             "img-src 'self' data: https:",
+            // Font sources: limited to self and data URIs only
             "font-src 'self' data:",
+            // Network connections: whitelist only required APIs
             "connect-src 'self' https://api.groq.com https://mighty-bulldog-76.clerk.accounts.dev",
-            "media-src 'self'",
+            // Media: only self (for audio recording)
+            "media-src 'self' blob:",
+            // Explicitly block objects, embeds, applets
             "object-src 'none'",
+            "embed-src 'none'",
+            // Base URI: prevent base tag injection
             "base-uri 'self'",
+            // Forms: only allow submission to self
             "form-action 'self'",
+            // Prevent framing entirely
             "frame-ancestors 'none'",
-            "upgrade-insecure-requests"
+            "frame-src 'none'",
+            // Block plugins
+            "plugin-types ''",
+            // Upgrade insecure requests
+            "upgrade-insecure-requests",
+            // Require Trusted Types (future enhancement)
+            // "require-trusted-types-for 'script'",
+            // Prevent MIME sniffing
+            "block-all-mixed-content"
           ].join('; ')
-        ]
+        ],
+        // Additional security headers
+        'X-Content-Type-Options': ['nosniff'],
+        'X-Frame-Options': ['DENY'],
+        'X-XSS-Protection': ['1; mode=block'],
+        'Referrer-Policy': ['no-referrer']
       }
     });
   });
@@ -708,6 +735,33 @@ function createWindow(): void {
 
   // Handle transcription with Groq Whisper API
   ipcMain.handle('transcribe-audio', async (event, audioBuffer: ArrayBuffer) => {
+    // Rate limiting: Max 20 requests per minute
+    const allowed = await checkRateLimit(rateLimiters.transcription, 'transcribe-audio');
+    
+    if (!allowed) {
+      const errorMsg = 'Too many transcription requests. Please wait a moment before trying again.';
+      console.warn('⚠️ Transcription rate limit exceeded');
+      
+      // Log rate limit violation
+      securityLogger.logRateLimitExceeded({
+        action: 'transcribe-audio',
+        limit: '20 requests per minute',
+        service: 'Groq Whisper API'
+      });
+      
+      // Send warning toast to main window
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('toast-notification', {
+          message: '⚠️ Slow down! Please wait before transcribing again.',
+          type: 'warning'
+        });
+      }
+      
+      return { success: false, error: errorMsg };
+    }
+    
+    let tempFilePath: string | null = null;
+    
     try {
       // Check if Groq client is initialized
       if (!groq) {
@@ -727,9 +781,10 @@ function createWindow(): void {
       
       console.log('Starting transcription with Groq Whisper API...');
       
-      // Create temporary file for audio
+      // Create temporary file for audio with cryptographically random name
       const tempDir = os.tmpdir();
-      const tempFilePath = path.join(tempDir, `recording_${Date.now()}.webm`);
+      const randomName = crypto.randomBytes(16).toString('hex');
+      tempFilePath = path.join(tempDir, `sweesh_recording_${randomName}.webm`);
       
       // Write audio buffer to file
       fs.writeFileSync(tempFilePath, Buffer.from(audioBuffer));
@@ -743,9 +798,6 @@ function createWindow(): void {
         model: "whisper-large-v3",
         response_format: "text"
       });
-      
-      // Clean up temporary file
-      fs.unlinkSync(tempFilePath);
       
       console.log('Transcription completed:', transcription);
       
@@ -783,6 +835,17 @@ function createWindow(): void {
       }
       
       return { success: false, error: errorMsg };
+    } finally {
+      // Always clean up temporary file, even on error
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+          console.log('Temporary audio file cleaned up:', tempFilePath);
+        } catch (cleanupError) {
+          console.error('Failed to clean up temporary file:', cleanupError);
+          // Don't throw - just log the error
+        }
+      }
     }
   });
 
@@ -798,10 +861,19 @@ function createWindow(): void {
     try {
       // Basic validation
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        securityLogger.logAPIKeyValidationFailed({
+          reason: 'Invalid API key format (empty or non-string)',
+          provided: typeof apiKey
+        });
         return { success: false, error: 'Invalid API key format' };
       }
       
       if (!apiKey.startsWith('gsk_')) {
+        securityLogger.logAPIKeyValidationFailed({
+          reason: 'API key does not start with required prefix',
+          expected: 'gsk_',
+          providedPrefix: apiKey.substring(0, 4)
+        });
         return { success: false, error: 'API key must start with "gsk_"' };
       }
       
@@ -855,10 +927,19 @@ function createWindow(): void {
     try {
       // Basic validation
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        securityLogger.logAPIKeyValidationFailed({
+          reason: 'Invalid API key format during update',
+          provided: typeof apiKey
+        });
         return { success: false, error: 'Invalid API key format' };
       }
       
       if (!apiKey.startsWith('gsk_')) {
+        securityLogger.logAPIKeyValidationFailed({
+          reason: 'API key update failed - invalid prefix',
+          expected: 'gsk_',
+          providedPrefix: apiKey.substring(0, 4)
+        });
         return { success: false, error: 'API key must start with "gsk_"' };
       }
       
@@ -973,6 +1054,11 @@ function createWindow(): void {
       // Validate URL before opening (security check)
       if (!validateExternalUrl(authUrl, AUTH_LANDING_URL)) {
         console.error('URL validation failed for auth flow');
+        securityLogger.logMaliciousURLBlocked({
+          url: authUrl,
+          reason: 'Failed external URL validation for auth flow',
+          expectedBase: AUTH_LANDING_URL
+        });
         return { success: false, error: 'Invalid authentication URL' };
       }
       
@@ -1035,6 +1121,16 @@ function createWindow(): void {
     return saveTranscriptions(transcriptions);
   });
 
+  // Security Statistics IPC Handler
+  ipcMain.handle('get-security-statistics', () => {
+    try {
+      return securityLogger.getStatistics();
+    } catch (error) {
+      console.error('Failed to get security statistics:', error);
+      return { error: 'Failed to retrieve security statistics' };
+    }
+  });
+
   // External links handler
   ipcMain.handle('open-external', async (event, url: string) => {
     try {
@@ -1049,6 +1145,12 @@ function createWindow(): void {
       
       if (!isAllowed) {
         console.error('Attempted to open disallowed URL:', url);
+        securityLogger.logMaliciousURLBlocked({
+          url,
+          reason: 'Domain not in allowed list',
+          attemptedDomain: parsedUrl.hostname,
+          allowedDomains: allowedDomains.join(', ')
+        });
         return;
       }
       
@@ -1183,18 +1285,36 @@ function validateExternalUrl(urlToValidate: string, expectedBaseUrl: string): bo
     // Check protocol (only allow https)
     if (parsedUrl.protocol !== 'https:') {
       console.warn('Invalid protocol detected:', parsedUrl.protocol);
+      securityLogger.logSuspiciousPattern({
+        pattern: 'Invalid URL protocol',
+        description: 'Attempted to use non-HTTPS protocol',
+        protocol: parsedUrl.protocol,
+        url: urlToValidate
+      });
       return false;
     }
     
     // Check that the origin matches the expected base URL
     if (parsedUrl.origin !== parsedBaseUrl.origin) {
       console.warn('Origin mismatch. Expected:', parsedBaseUrl.origin, 'Got:', parsedUrl.origin);
+      securityLogger.logSuspiciousPattern({
+        pattern: 'Origin mismatch',
+        description: 'URL origin does not match expected base',
+        expected: parsedBaseUrl.origin,
+        received: parsedUrl.origin
+      });
       return false;
     }
     
     // Check that the pathname starts with the expected base path
     if (!parsedUrl.pathname.startsWith(parsedBaseUrl.pathname)) {
       console.warn('Path mismatch. Expected path to start with:', parsedBaseUrl.pathname, 'Got:', parsedUrl.pathname);
+      securityLogger.logSuspiciousPattern({
+        pattern: 'Path mismatch',
+        description: 'URL path does not start with expected base path',
+        expectedPath: parsedBaseUrl.pathname,
+        receivedPath: parsedUrl.pathname
+      });
       return false;
     }
     
@@ -1210,6 +1330,12 @@ function validateExternalUrl(urlToValidate: string, expectedBaseUrl: string): bo
     for (const pattern of dangerousPatterns) {
       if (pattern.test(urlToValidate)) {
         console.warn('Dangerous pattern detected in URL:', pattern);
+        securityLogger.logSuspiciousPattern({
+          pattern: 'Dangerous URL pattern',
+          description: 'Malicious pattern detected in URL',
+          detectedPattern: pattern.toString(),
+          url: urlToValidate
+        });
         return false;
       }
     }
@@ -1217,6 +1343,11 @@ function validateExternalUrl(urlToValidate: string, expectedBaseUrl: string): bo
     return true;
   } catch (error) {
     console.error('URL validation error:', error);
+    securityLogger.logInvalidInput({
+      field: 'url-validation',
+      reason: 'URL parsing error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
     return false;
   }
 }
@@ -1229,6 +1360,10 @@ const jwksClientInstance = jwksClient({
   rateLimit: true,
   jwksRequestsPerMinute: 10
 });
+
+// Initialize deduplication tracker for authentication attempts
+// Prevents duplicate auth requests within 60 seconds
+const authDeduplicator = new DeduplicationTracker(60000);
 
 // Helper function to get signing key from JWKS
 function getSigningKey(header: jwt.JwtHeader, callback: jwt.SigningKeyCallback): void {
@@ -1310,7 +1445,7 @@ async function validateJWTToken(token: string): Promise<any> {
   }
 }
 
-// Handle Deep Link Authentication
+// Handle Deep Link Authentication with rate limiting and deduplication
 function handleDeepLinkAuth(url: string): void {
   try {
     console.log('Received deep link:', url);
@@ -1322,6 +1457,12 @@ function handleDeepLinkAuth(url: string): void {
     const validPaths = ['/auth/callback', '/callback', 'auth/callback', 'callback'];
     if (!validPaths.includes(urlObj.pathname)) {
       console.log('Invalid deep link path:', urlObj.pathname);
+      securityLogger.logSuspiciousPattern({
+        pattern: 'Invalid deep link path',
+        description: 'Received deep link with unauthorized path',
+        path: urlObj.pathname,
+        validPaths: validPaths.join(', ')
+      });
       return;
     }
     
@@ -1331,40 +1472,115 @@ function handleDeepLinkAuth(url: string): void {
     
     if (!token || !challenge || !uuid) {
       console.log('Missing required parameters in deep link');
+      securityLogger.logInvalidInput({
+        field: 'deep-link-parameters',
+        reason: 'Missing required authentication parameters',
+        hasToken: !!token,
+        hasChallenge: !!challenge,
+        hasUuid: !!uuid
+      });
       return;
     }
     
-    // Validate the JWT token
-    validateJWTToken(token)
-      .then((userData) => {
-        // Save authentication data
-        const authData = {
-          user: userData,
-          challenge,
-          uuid,
-          authenticatedAt: new Date().toISOString()
-        };
-        
-        const saved = saveAuthSecurely(authData);
-        if (saved) {
-          console.log('Authentication successful, user data saved');
-          
-          // Notify the renderer process
+    // Deduplication check: Prevent duplicate auth attempts
+    const attemptKey = `${challenge}-${uuid}`;
+    if (authDeduplicator.isDuplicate(attemptKey)) {
+      console.warn('🔁 Duplicate authentication attempt blocked:', attemptKey);
+      securityLogger.logDeduplicationBlocked({
+        key: attemptKey,
+        action: 'authentication',
+        challenge,
+        uuid
+      });
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth-error', 'Duplicate authentication attempt detected. Please wait.');
+      }
+      return;
+    }
+    
+    // Rate limiting check: Max 3 attempts per minute
+    checkRateLimit(rateLimiters.authentication, 'deep-link-auth')
+      .then(allowed => {
+        if (!allowed) {
+          console.warn('⚠️ Authentication rate limit exceeded');
+          securityLogger.logRateLimitExceeded({
+            action: 'deep-link-auth',
+            limit: '3 attempts per minute',
+            challenge,
+            uuid
+          });
           if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('auth-success', userData);
+            mainWindow.webContents.send('auth-error', 
+              'Too many authentication attempts. Please wait a moment before trying again.'
+            );
           }
-        } else {
-          console.error('Failed to save authentication data');
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('auth-error', 'Failed to save authentication data');
-          }
+          return;
         }
+        
+        // Proceed with JWT validation
+        validateJWTToken(token)
+          .then((userData) => {
+            // Save authentication data
+            const authData = {
+              user: userData,
+              challenge,
+              uuid,
+              authenticatedAt: new Date().toISOString()
+            };
+            
+            const saved = saveAuthSecurely(authData);
+            if (saved) {
+              console.log('Authentication successful, user data saved');
+              
+              // Notify the renderer process
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('auth-success', userData);
+              }
+            } else {
+              console.error('Failed to save authentication data');
+              securityLogger.logAuthFailed({
+                reason: 'Failed to save authentication data',
+                userId: userData.userId,
+                challenge
+              });
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('auth-error', 'Failed to save authentication data');
+              }
+            }
+          })
+          .catch((error) => {
+            console.error('Authentication failed:', error);
+            securityLogger.logJWTValidationFailed({
+              error: error.message,
+              challenge,
+              uuid
+            });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('auth-error', 'Authentication failed: ' + error.message);
+            }
+          });
       })
       .catch((error) => {
-        console.error('Authentication failed:', error);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('auth-error', 'Authentication failed: ' + error.message);
-        }
+        console.error('Rate limit check error:', error);
+        // Fail-open: allow the auth attempt if rate limiter errors
+        validateJWTToken(token)
+          .then((userData) => {
+            const authData = {
+              user: userData,
+              challenge,
+              uuid,
+              authenticatedAt: new Date().toISOString()
+            };
+            const saved = saveAuthSecurely(authData);
+            if (saved && mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('auth-success', userData);
+            }
+          })
+          .catch((validationError) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('auth-error', 'Authentication failed: ' + validationError.message);
+            }
+          });
       });
   } catch (error) {
     console.error('Error handling deep link auth:', error);
@@ -1448,7 +1664,7 @@ function createActiveWindow(startRecording: boolean = false): void {
     alwaysOnTop: true, // Always on top
   });
 
-  // Set Content Security Policy headers for active window
+  // Set Content Security Policy headers for active window (stricter for recording window)
   activeWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -1456,18 +1672,38 @@ function createActiveWindow(startRecording: boolean = false): void {
         'Content-Security-Policy': [
           [
             "default-src 'self'",
+            // Script CSP: inline needed for React but no eval
             "script-src 'self' 'unsafe-inline'",
+            // Style CSP: inline needed for styled components
             "style-src 'self' 'unsafe-inline'",
+            // Image sources: limited to self and data URIs
             "img-src 'self' data:",
+            // Font sources: limited to self and data URIs
             "font-src 'self' data:",
+            // Network: only Groq API for transcription
             "connect-src 'self' https://api.groq.com",
+            // Media: self and blob for audio recording
             "media-src 'self' blob:",
+            // Block all object types
             "object-src 'none'",
+            "embed-src 'none'",
+            // Prevent base tag injection
             "base-uri 'self'",
+            // No form submissions from active window
             "form-action 'none'",
-            "frame-ancestors 'none'"
+            // Prevent any framing
+            "frame-ancestors 'none'",
+            "frame-src 'none'",
+            // Block plugins
+            "plugin-types ''",
+            // Block mixed content
+            "block-all-mixed-content"
           ].join('; ')
-        ]
+        ],
+        // Additional security headers for active window
+        'X-Content-Type-Options': ['nosniff'],
+        'X-Frame-Options': ['DENY'],
+        'Referrer-Policy': ['no-referrer']
       }
     });
   });
@@ -1593,9 +1829,12 @@ function toggleStartup(enabled: boolean): void {
   } else if (process.platform === 'darwin') {
     // macOS: Use execFile with proper escaping for AppleScript
     if (enabled) {
-      // Escape single quotes in path for AppleScript
-      const escapedPath = appPath.replace(/'/g, "'\\''");
-      const script = `tell application "System Events" to make login item at end with properties {path:"${escapedPath}", hidden:false}`;
+      // Use POSIX path format which is safer for AppleScript
+      // Escape single quotes and backslashes to prevent script injection
+      const safePath = appPath
+        .replace(/\\/g, '\\\\')  // Escape backslashes first
+        .replace(/'/g, "\\'");   // Then escape single quotes
+      const script = `tell application "System Events" to make login item at end with properties {path:"${safePath}", hidden:false}`;
       
       execFile('osascript', ['-e', script], (error) => {
         if (error) {
@@ -1606,7 +1845,8 @@ function toggleStartup(enabled: boolean): void {
         }
       });
     } else {
-      const script = `tell application "System Events" to delete login item "Sweesh"`;
+      // Hardcoded app name to prevent injection
+      const script = 'tell application "System Events" to delete login item "Sweesh"';
       
       execFile('osascript', ['-e', script], (error) => {
         if (error) {
@@ -1990,6 +2230,27 @@ function showAboutDialog(): void {
       height: 16px;
     }
 
+    /* Privacy Policy Link */
+    .privacy-policy-link {
+      font-size: clamp(11px, 2.5vw, 12px);
+      color: #888;
+      margin-bottom: 16px;
+      animation: fadeInUp 0.6s ease-out 0.45s both;
+    }
+
+    .privacy-policy-link a {
+      color: #ff6b35;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s ease;
+      border-bottom: 1px solid transparent;
+    }
+
+    .privacy-policy-link a:hover {
+      color: #ff8555;
+      border-bottom-color: #ff8555;
+    }
+
     /* Features Section */
         .features {
       background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
@@ -2163,7 +2424,7 @@ function showAboutDialog(): void {
 
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-    <p class="version-badge">Version 1.3.9</p>
+    <p class="version-badge">Version 1.4.0</p>
 
     <!-- Added author section with link -->
     <p class="author-section">
@@ -2185,6 +2446,11 @@ function showAboutDialog(): void {
         <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8a3.6 3.6 0 0 0 3.6 3.6h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6a3.6 3.6 0 0 0-3.6-3.6zm4.4 2a4.4 4.4 0 1 1 0 8.8a4.4 4.4 0 0 1 0-8.8m0 2a2.4 2.4 0 1 0 0 4.8a2.4 2.4 0 0 0 0-4.8m5.5-1a1 1 0 1 1 0 2a1 1 0 0 1 0-2"></path></svg>
       </a>
     </div>
+
+    <!-- Privacy Policy Link -->
+    <p class="privacy-policy-link">
+      <a href="https://sweesh.vercel.app/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+    </p>
 
       <div class="features">
       <h3>Quick Shortcuts</h3>

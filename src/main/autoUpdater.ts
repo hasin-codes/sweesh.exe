@@ -14,7 +14,7 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { spawn, exec } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import * as os from 'os';
 import * as semver from 'semver';
 
@@ -166,16 +166,17 @@ export function showUpdateModal(mainWindow: BrowserWindow, version: string): Pro
 
 /**
  * Kill all app processes except current one
- * Uses Windows taskkill command
+ * Uses Windows taskkill command (secure version using execFile)
  */
 export async function killAllProcesses(): Promise<void> {
   return new Promise((resolve) => {
     const appName = app.getName();
-    const command = `taskkill /F /IM ${appName}.exe /T`;
+    const args = ['/F', '/IM', `${appName}.exe`, '/T'];
     
-    log(`Killing all app processes: ${command}`);
+    log(`Killing all app processes: taskkill ${args.join(' ')}`);
     
-    exec(command, (error, stdout, stderr) => {
+    // Use execFile instead of exec to prevent command injection
+    execFile('taskkill', args, (error, stdout, stderr) => {
       if (error) {
         log(`Process kill command failed (this is expected if only one instance): ${error.message}`);
       }
@@ -194,16 +195,27 @@ export async function killAllProcesses(): Promise<void> {
 
 /**
  * Launch installer as detached process and exit app
+ * Secure version without shell interpretation
  */
 export function launchInstallerAndExit(installerPath: string): void {
   log(`Launching installer: ${installerPath}`);
   
   try {
+    // Validate installer path exists and is an exe file
+    if (!fs.existsSync(installerPath)) {
+      throw new Error('Installer file does not exist');
+    }
+    
+    if (!installerPath.toLowerCase().endsWith('.exe')) {
+      throw new Error('Installer must be an .exe file');
+    }
+    
     // Launch installer with silent flag (/S for NSIS)
+    // Removed shell: true to prevent command injection
     const installer = spawn(installerPath, ['/S'], {
       detached: true,
       stdio: 'ignore',
-      shell: true
+      shell: false  // Security fix: Don't use shell interpretation
     });
     
     // Detach the process so it continues after parent exits
