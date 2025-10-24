@@ -258,10 +258,7 @@ export default function Home() {
             <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">
               Alt + Shift + M
             </kbd>
-            , or{" "}
-            <kbd className="px-2 py-1 bg-gray-700 rounded text-xs font-mono text-white">
-              F12
-            </kbd>{" "}
+            {" "}
             to start, release to stop <strong>release</strong> to hide it
           </p>
           

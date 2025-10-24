@@ -2444,7 +2444,7 @@ function showAboutDialog(): void {
 
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-    <p class="version-badge">Version 1.4.1</p>
+    <p class="version-badge">Version 1.4.2</p>
 
     <!-- Added author section with link -->
     <p class="author-section">
@@ -2471,14 +2471,6 @@ function showAboutDialog(): void {
     <p class="privacy-policy-link">
       <a href="https://sweesh.vercel.app/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
     </p>
-
-      <div class="features">
-      <h3>Quick Shortcuts</h3>
-      <ul>
-        <li><strong>Ctrl+Shift+M</strong></li>
-        <li><strong>Alt+Shift+M</strong></li>
-        </ul>
-      </div>
 
     <p class="description">A Gnostic Product</p>
 
