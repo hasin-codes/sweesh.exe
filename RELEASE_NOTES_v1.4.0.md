@@ -45,13 +45,11 @@ We've implemented an enterprise-grade security monitoring system that tracks all
 
 #### Log File Locations
 
-**Windows**: `C:\Users\{Username}\AppData\Roaming\Sweesh\logs\`
-- `security.log` - All security events
-- `security-alerts.log` - Critical and alert-level events only
+**Windows 10/11**: `C:\Users\{Username}\AppData\Local\sweesh-security-logs\`
+- `security.log` - All security events (max 5MB with auto-rotation)
+- `security-stats.json` - Security statistics and metrics
 
-**macOS**: `~/Library/Application Support/Sweesh/logs/`
-
-**Linux**: `~/.config/Sweesh/logs/`
+**Note**: Currently available for Windows only. macOS and Linux support planned for future releases.
 
 ### 📊 Pattern Detection & Alerts
 
@@ -328,13 +326,13 @@ Special thanks to:
 
 ---
 
-**Upgrade Command**:
+**Upgrade for Windows**:
 ```bash
-# Download the latest version
-# Windows: Sweesh-Setup-1.4.0.exe
-# macOS: Sweesh-1.4.0.dmg
-# Linux: Sweesh-1.4.0.AppImage
+# Download the latest version for Windows 10/11
+Sweesh-Setup-1.4.0.exe
 ```
+
+**Platform Support**: Currently Windows only. macOS and Linux versions coming soon.
 
 ---
 

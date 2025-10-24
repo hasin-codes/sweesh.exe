@@ -18,7 +18,7 @@
 - **Transcription Management**: View, edit, copy, and delete your transcriptions
 - **Persistent Storage**: All transcriptions saved locally in encrypted format with automatic loading on startup
 - **Auto-Update System**: Automatic update checks and background downloads with seamless installation
-- **Cross-platform**: Available for Windows, macOS, and Linux
+- **Windows Platform**: Optimized for Windows 10/11 with native integrations
 
 ### First-Run Experience
 - **Onboarding Flow**: Guided 2-step setup for new users
@@ -28,12 +28,12 @@
 - **Status Tracking**: Tracks onboarding completion and API key configuration status
 
 ### Security & Privacy
-- **OS-Level Encryption**: API keys encrypted with system secure storage (Keychain/DPAPI/libsecret)
+- **OS-Level Encryption**: API keys encrypted with Windows DPAPI secure storage
 - **AES-256-CBC Fallback**: Automatic fallback encryption when OS-level encryption unavailable
 - **Secure Storage Management**: Complete API key lifecycle management (save, update, delete)
 - **Privacy by Design**: API keys never stored in plain text; clipboard operations in main process
 - **Encryption Status**: Real-time feedback on encryption method being used
-- **Cross-Platform Security**: Platform-specific security implementations with fallbacks
+- **Windows Security**: DPAPI-based encryption with AES-256-CBC fallback for maximum security
 - **Comprehensive Security Logging**: Enterprise-grade monitoring with 10+ security event types
 - **Real-time Threat Detection**: Automatic pattern recognition and suspicious activity alerts
 - **Rate Limiting Protection**: Multi-layer rate limiting for API calls and authentication
@@ -75,6 +75,10 @@
 - **Startup Management**: Optional system startup integration with tray menu controls
 
 ## 🚀 Quick Start
+
+### System Requirements
+- **Operating System**: Windows 10 or Windows 11 (64-bit or 32-bit)
+- **Platform Note**: Currently Windows only. macOS and Linux support planned for future releases.
 
 ### Prerequisites
 - Node.js (v18 or higher)
@@ -280,10 +284,9 @@ npm start
 ```
 
 ### Platform-specific Builds
-The project includes pre-built executables for multiple platforms:
-- **Windows**: `sweesh-win32-x64/` and `sweesh-win32-ia32/`
-- **macOS**: `sweesh-mas-x64/`
-- **Linux**: `sweesh-linux-x64/` and `sweesh-linux-arm64/`
+Currently available for Windows only:
+- **Windows 10/11**: 64-bit (x64) and 32-bit (ia32) versions
+- **Future Platforms**: macOS and Linux support planned for future releases
 
 ## 🎯 Usage
 
@@ -422,12 +425,9 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - Encryption status displays correctly without crashes
 
 **Encryption unavailable / security warnings:**
-- The app automatically falls back to AES‑256-CBC encryption if OS‑level encryption isn't available
-- On Linux, install `libsecret` to enable OS‑level encryption and restart the app:
-  - Ubuntu/Debian: `sudo apt-get install libsecret-1-0`
-  - Fedora: `sudo dnf install libsecret`
-  - Arch: `sudo pacman -S libsecret`
-- **Note**: The Settings UI shows which encryption method is active and provides guidance when OS‑level encryption is missing
+- The app automatically falls back to AES‑256-CBC encryption if Windows DPAPI encryption isn't available
+- On Windows, the app uses DPAPI (Data Protection API) for secure credential storage
+- **Note**: The Settings UI shows which encryption method is active and provides guidance
 - **Migration**: Existing `.env` files are automatically migrated to secure storage on first launch
 
 **Auto-update not working:**
@@ -438,10 +438,7 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - Check logs at `%APPDATA%\sweesh\logs\main.log` (Windows) for update status
 
 **Security logs not generating:**
-- Security logs are located at:
-  - Windows: `%LOCALAPPDATA%\sweesh-security-logs\security.log`
-  - macOS: `~/Library/Application Support/sweesh-security-logs/security.log`
-  - Linux: `~/.config/sweesh-security-logs/security.log`
+- Security logs are located at: `%LOCALAPPDATA%\sweesh-security-logs\security.log`
 - Logs automatically rotate at 10MB
 - Use `get-security-statistics` IPC to view stats programmatically
 - Check console for color-coded security events during development
@@ -518,6 +515,7 @@ This software and associated documentation files (the "Software") are the proper
 - ❌ **No Redistribution**: You may not distribute, modify, or create derivative works.
 - ❌ **No Commercial Use**: Commercial use is strictly prohibited without written permission.
 - ✅ **Personal Use Only**: Licensed users may use the software for personal purposes only.
+- 💻 **Platform**: Currently available for Windows 10/11 only
 - 📧 **Contact**: For licensing inquiries, contact via [hasin.vercel.app](https://hasin.vercel.app)
 
 ## 🙏 Acknowledgments
@@ -536,8 +534,11 @@ This software and associated documentation files (the "Software") are the proper
 
 If you encounter issues or have questions:
 
-1. Open an issue in your repository's Issues tab
-2. Include OS, app version, and reproduction steps
+1. Open an issue in the repository's Issues tab
+2. Include Windows version, app version, and reproduction steps
+3. Check the troubleshooting section first
+
+**Platform Note**: Currently supports Windows 10/11 only. macOS and Linux support coming in future releases.
 
 ## 🔮 Roadmap
 
@@ -555,6 +556,7 @@ If you encounter issues or have questions:
 - [x] Automatic clipboard integration
 
 ### Upcoming Features (v1.5.0+)
+- [ ] **Cross-Platform Support**: macOS and Linux versions
 - [ ] **Remote Security Monitoring**: SIEM integration for enterprise logging
 - [ ] **Real-time Security Dashboard**: Visual security metrics and alerts
 - [ ] **Email/Slack Alerts**: Critical security event notifications

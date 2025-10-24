@@ -11,6 +11,7 @@ import * as jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { rateLimiters, checkRateLimit, DeduplicationTracker } from './lib/rateLimiter';
 import { securityLogger } from './lib/securityLogger';
+import { setupAutoUpdater, checkForUpdates, installUpdateAndRestart } from './main/autoUpdater';
 
 // Lightweight .env loader (no external deps). Ensures GROQ_API_KEY is available at runtime.
 function loadEnvFromFile(): void {
@@ -1110,7 +1111,26 @@ function createWindow(): void {
     }
   });
 
-  // Auto-updater IPC handlers removed - using only pending directory check
+  // Auto-updater IPC handlers (electron-updater for GitHub releases)
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      await checkForUpdates();
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to check for updates:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('install-update-and-restart', () => {
+    try {
+      installUpdateAndRestart();
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to install update:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
 
   // Persistence IPC Handlers
   ipcMain.handle('load-transcriptions', () => {
@@ -2424,7 +2444,7 @@ function showAboutDialog(): void {
 
       <h1>Sweesh</h1>
       <p class="tagline">Speak it, Send it</p>
-    <p class="version-badge">Version 1.4.0</p>
+    <p class="version-badge">Version 1.4.1</p>
 
     <!-- Added author section with link -->
     <p class="author-section">
@@ -2513,6 +2533,9 @@ if (!gotTheLock) {
   // Check encryption availability after app is ready
   checkEncryptionAvailability();
   
+  // Initialize security logger (must be done after app is ready)
+  securityLogger.initialize();
+  
   // Register deep link protocol
   registerDeepLinkProtocol();
   
@@ -2520,6 +2543,21 @@ if (!gotTheLock) {
   
   // Show the window
   mainWindow.show();
+  
+  // Setup auto-updater (electron-updater for GitHub releases)
+  try {
+    setupAutoUpdater(mainWindow);
+    
+    // Check for updates after 3 seconds (give the app time to fully load)
+    setTimeout(() => {
+      checkForUpdates().catch(error => {
+        console.error('Auto-update check failed:', error);
+      });
+    }, 3000);
+  } catch (error) {
+    console.error('Auto-updater setup failed:', error);
+    // Continue with normal startup even if auto-updater fails
+  }
   
   // Initialize Groq client with saved API key (after app is ready so safeStorage is available)
   setTimeout(() => {

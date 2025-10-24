@@ -47,38 +47,56 @@ interface SecurityEvent {
 }
 
 class SecurityLogger {
-  private logFilePath: string;
-  private alertLogPath: string;
+  private logFilePath: string = '';
+  private alertLogPath: string = '';
   private maxLogSize: number = 10 * 1024 * 1024; // 10MB
   private eventCounts: Map<SecurityEventType, number> = new Map();
   private suspiciousActivityThreshold = 5; // Alert after 5 suspicious events within time window
   private timeWindow = 60000; // 1 minute
   private recentEvents: Array<{ type: SecurityEventType; timestamp: number }> = [];
+  private initialized: boolean = false;
 
   constructor() {
-    // Initialize log file paths
-    const logDir = path.join(app.getPath('userData'), 'logs');
-    
-    // Ensure log directory exists
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    this.logFilePath = path.join(logDir, 'security.log');
-    this.alertLogPath = path.join(logDir, 'security-alerts.log');
-
+    // Don't initialize paths here - wait for app to be ready
     // Initialize event counters
     Object.values(SecurityEventType).forEach(type => {
       this.eventCounts.set(type as SecurityEventType, 0);
     });
+  }
 
-    // Log initialization
-    this.log(SecurityLevel.INFO, SecurityEventType.SUSPICIOUS_PATTERN, 'Security logger initialized', {
-      logPath: this.logFilePath,
-      alertPath: this.alertLogPath,
-      hostname: os.hostname(),
-      platform: os.platform()
-    });
+  /**
+   * Initialize the security logger (must be called after app is ready)
+   */
+  public initialize(): void {
+    if (this.initialized) {
+      console.warn('Security logger already initialized');
+      return;
+    }
+
+    try {
+      // Initialize log file paths
+      const logDir = path.join(app.getPath('userData'), 'logs');
+      
+      // Ensure log directory exists
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+
+      this.logFilePath = path.join(logDir, 'security.log');
+      this.alertLogPath = path.join(logDir, 'security-alerts.log');
+      this.initialized = true;
+
+      // Log initialization
+      this.log(SecurityLevel.INFO, SecurityEventType.SUSPICIOUS_PATTERN, 'Security logger initialized', {
+        logPath: this.logFilePath,
+        alertPath: this.alertLogPath,
+        hostname: os.hostname(),
+        platform: os.platform()
+      });
+    } catch (error) {
+      console.error('Failed to initialize security logger:', error);
+      this.initialized = false;
+    }
   }
 
   /**
@@ -90,6 +108,12 @@ class SecurityLogger {
     message: string,
     details?: Record<string, any>
   ): void {
+    // Skip logging if not initialized (fail gracefully)
+    if (!this.initialized) {
+      console.warn(`Security logger not initialized. Skipping log: ${level} - ${message}`);
+      return;
+    }
+
     const event: SecurityEvent = {
       timestamp: new Date().toISOString(),
       level,
