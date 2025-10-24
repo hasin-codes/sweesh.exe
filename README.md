@@ -1,9 +1,9 @@
-# Sweesh - Voice Transcription Desktop App
+# Sweesh - Speak it, Send it
 
 <div align="center">
   <img src="public/icons/logo.png" alt="Sweesh Logo" width="64" height="64">
-  <h3>Voice Transcription Made Simple</h3>
-  <p>An elegant Electron-based desktop application for real-time voice transcription with automatic clipboard integration and beautiful visual effects.</p>
+  <h3>Capture ideas before they fade - with your always-ready voice keyboard.</h3>
+  <p>Not another voice note app, Sweesh helps you capture sudden ideas and detailed thoughts before you forget, powered by your always-ready voice keyboard.</p>
 </div>
 
 ## 🌟 Features
