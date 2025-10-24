@@ -16,7 +16,8 @@
     "dist:win": "npm run rebuild && electron-builder --win",
     "dist:mac": "npm run rebuild && electron-builder --mac",
     "dist:linux": "npm run rebuild && electron-builder --linux",
-    "release": "npm run rebuild && electron-builder --win --publish always"
+    "release": "npm run rebuild && electron-builder --win --mac --linux --publish always",
+    "release:win": "npm run rebuild && electron-builder --win --publish always"
   },
   "keywords": [
     "electron",
@@ -112,13 +113,25 @@
     },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
       ],
       "category": "public.app-category.productivity",
       "icon": "public/icons/logo.icns",
       "hardenedRuntime": true,
-      "entitlements": "entitlements.mac.plist"
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": false,
+      "type": "distribution",
+      "minimumSystemVersion": "10.13.0",
+      "darkModeSupport": true
     },
     "win": {
       "target": [

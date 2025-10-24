@@ -77,8 +77,47 @@
 ## 🚀 Quick Start
 
 ### System Requirements
-- **Operating System**: Windows 10 or Windows 11 (64-bit or 32-bit)
-- **Platform Note**: Currently Windows only. macOS and Linux support planned for future releases.
+- **Operating System**: 
+  - ✅ **Windows 10/11** (64-bit or 32-bit)
+  - ✅ **macOS 10.13+** (High Sierra or later) - Intel & Apple Silicon
+  - ⚠️ **Linux** (X11 environments) - Experimental
+
+### Installation by Platform
+
+#### 🪟 Windows
+1. Download `Sweesh-Setup-[version].exe` from [GitHub Releases](https://github.com/hasin-codes/sweesh.exe/releases)
+2. Run the installer
+3. Follow the setup wizard
+4. Launch Sweesh from Start Menu or Desktop
+
+#### 🍎 macOS
+1. Download the appropriate file from [GitHub Releases](https://github.com/hasin-codes/sweesh.exe/releases):
+   - **Apple Silicon (M1/M2/M3):** `Sweesh-[version]-arm64.dmg`
+   - **Intel Macs:** `Sweesh-[version]-x64.dmg`
+   - **Universal (both):** `Sweesh-[version].dmg`
+
+2. Open the downloaded DMG file
+3. Drag Sweesh.app to your Applications folder
+4. **First Launch (Important):**
+   - Right-click on Sweesh.app → Select "Open"
+   - Click "Open" in the security dialog (required for unsigned apps)
+   
+5. **Grant Required Permissions:**
+   - **Microphone Access:** Required for voice recording
+   - **Accessibility Access:** Required for global keyboard shortcuts
+   
+   Go to: **System Preferences → Security & Privacy → Privacy**
+   - Click **Microphone** → Check "Sweesh"
+   - Click **Accessibility** → Click 🔒 to unlock → Add Sweesh.app
+
+#### 🐧 Linux (Experimental)
+1. Download `Sweesh-[version].AppImage` from [GitHub Releases](https://github.com/hasin-codes/sweesh.exe/releases)
+2. Make it executable: `chmod +x Sweesh-[version].AppImage`
+3. Run: `./Sweesh-[version].AppImage`
+
+**Note:** X11 environment required. Wayland support is not yet available.
+
+**📚 Detailed macOS Setup Guide:** See [MACOS_SUPPORT.md](MACOS_SUPPORT.md) for comprehensive macOS documentation, troubleshooting, and build instructions.
 
 ### Prerequisites
 - Node.js (v18 or higher)
@@ -284,9 +323,31 @@ npm start
 ```
 
 ### Platform-specific Builds
-Currently available for Windows only:
-- **Windows 10/11**: 64-bit (x64) and 32-bit (ia32) versions
-- **Future Platforms**: macOS and Linux support planned for future releases
+
+**Windows:**
+```bash
+npm run dist:win
+```
+Builds for Windows 10/11 (64-bit and 32-bit)
+
+**macOS:**
+```bash
+npm run dist:mac
+```
+Builds for macOS 10.13+ (Intel x64 and Apple Silicon arm64)
+
+**Linux:**
+```bash
+npm run dist:linux
+```
+Builds AppImage and .deb packages (X11 required)
+
+**All Platforms (using GitHub Actions):**
+```bash
+# Create and push a version tag to trigger multi-platform builds
+npm version patch  # or minor, or major
+git push origin --tags
+```
 
 ## 🎯 Usage
 
@@ -535,14 +596,20 @@ This software and associated documentation files (the "Software") are the proper
 If you encounter issues or have questions:
 
 1. Open an issue in the repository's Issues tab
-2. Include Windows version, app version, and reproduction steps
+2. Include your OS (Windows/macOS/Linux), app version, and reproduction steps
 3. Check the troubleshooting section first
 
-**Platform Note**: Currently supports Windows 10/11 only. macOS and Linux support coming in future releases.
+**Platform Support**: 
+- ✅ Windows 10/11 (fully tested and supported)
+- ✅ macOS 10.13+ (tested via GitHub Actions, community feedback welcome)
+- ⚠️ Linux X11 (experimental, community-supported)
 
 ## 🔮 Roadmap
 
 ### Completed Features ✅
+- [x] **Cross-Platform Support**: macOS and Linux versions (v1.4.3)
+- [x] **Multi-Architecture Builds**: Intel and Apple Silicon support (v1.4.3)
+- [x] **Automated CI/CD**: GitHub Actions multi-platform builds (v1.4.3)
 - [x] Comprehensive security logging system (v1.4.0)
 - [x] Rate limiting and threat detection (v1.4.0)
 - [x] Electron security updates (v1.4.0)
@@ -556,7 +623,6 @@ If you encounter issues or have questions:
 - [x] Automatic clipboard integration
 
 ### Upcoming Features (v1.5.0+)
-- [ ] **Cross-Platform Support**: macOS and Linux versions
 - [ ] **Remote Security Monitoring**: SIEM integration for enterprise logging
 - [ ] **Real-time Security Dashboard**: Visual security metrics and alerts
 - [ ] **Email/Slack Alerts**: Critical security event notifications

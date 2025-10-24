@@ -1,96 +1,160 @@
-name: Release
+name: Build & Release
 
 on:
   push:
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+      - 'v*'  # Triggers on version tags like v1.4.3, v1.5.0, etc.
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
 
 jobs:
   build:
-    name: Build and Release on ${{ matrix.os }}
-    permissions:
-      contents: write
+    name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60  # Prevent jobs from running indefinitely
+    
     strategy:
-      fail-fast: false  # Continue building other platforms if one fails
+      fail-fast: false  # Continue building other platforms even if one fails
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Node
+      
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '18'
           cache: 'npm'
-        timeout-minutes: 5
-
-      - name: Install system dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        timeout-minutes: 5
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsecret-1-dev
-
+      
       - name: Install dependencies
-        timeout-minutes: 10
         run: npm ci
       
-      - name: Debug - Show environment (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          node --version
-          npm --version
-          echo "GH_TOKEN is set: ${{ secrets.GH_TOKEN != '' }}"
-          echo "Current directory: $(pwd)"
-          ls -la
-      
-      - name: Debug - Show environment (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: powershell
-        run: |
-          node --version
-          npm --version
-          Write-Host "GH_TOKEN is set: ${{ secrets.GH_TOKEN != '' }}"
-          Write-Host "Current directory: $(Get-Location)"
-          Get-ChildItem
-
-      - name: Build app
-        timeout-minutes: 15
-        run: npm run rebuild
-
-      - name: Package and publish (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        timeout-minutes: 20
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: npx electron-builder -l --publish always
-
-      - name: Package and publish (Windows)
-        if: matrix.os == 'windows-latest'
-        timeout-minutes: 20
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: npx electron-builder -w --publish always
-
-      - name: Package and publish (macOS)
+      # Generate .icns file for macOS if it doesn't exist
+      - name: Generate macOS icon
         if: matrix.os == 'macos-latest'
-        timeout-minutes: 20
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: npx electron-builder -m --publish always
+        run: |
+          if [ ! -f "public/icons/logo.icns" ]; then
+            echo "⚠️  logo.icns not found, generating from PNG..."
+            # Install iconutil dependencies
+            brew install imagemagick
+            
+            # Create iconset directory
+            mkdir -p logo.iconset
+            
+            # Generate all required icon sizes from logo.png
+            magick public/icons/logo.png -resize 16x16 logo.iconset/icon_16x16.png
+            magick public/icons/logo.png -resize 32x32 logo.iconset/icon_16x16@2x.png
+            magick public/icons/logo.png -resize 32x32 logo.iconset/icon_32x32.png
+            magick public/icons/logo.png -resize 64x64 logo.iconset/icon_32x32@2x.png
+            magick public/icons/logo.png -resize 128x128 logo.iconset/icon_128x128.png
+            magick public/icons/logo.png -resize 256x256 logo.iconset/icon_128x128@2x.png
+            magick public/icons/logo.png -resize 256x256 logo.iconset/icon_256x256.png
+            magick public/icons/logo.png -resize 512x512 logo.iconset/icon_256x256@2x.png
+            magick public/icons/logo.png -resize 512x512 logo.iconset/icon_512x512.png
+            magick public/icons/logo.png -resize 1024x1024 logo.iconset/icon_512x512@2x.png
+            
+            # Convert to .icns
+            iconutil -c icns logo.iconset -o public/icons/logo.icns
+            
+            # Cleanup
+            rm -rf logo.iconset
+            
+            echo "✅ Generated logo.icns successfully"
+          else
+            echo "✅ logo.icns already exists"
+          fi
       
-      - name: Upload build artifacts on failure
-        if: failure()
+      - name: Build for ${{ matrix.platform }}
+        run: npm run dist:${{ matrix.platform }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: List build artifacts
+        run: |
+          echo "📦 Build artifacts:"
+          ls -lh dist/
+      
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ matrix.os }}
+          name: sweesh-${{ matrix.platform }}
           path: |
-            dist/
-            *.log
-          retention-days: 5
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 30
+  
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display structure
+        run: |
+          echo "📦 Downloaded artifacts:"
+          ls -R artifacts/
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.blockmap" \) -exec cp {} release-files/ \;
+          echo "📦 Release files ready:"
+          ls -lh release-files/
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## 🎉 Multi-Platform Release
+            
+            ### 📥 Downloads
+            
+            **Windows Users:**
+            - Download `Sweesh-Setup-${{ github.ref_name }}.exe`
+            
+            **macOS Users:**
+            - **Apple Silicon (M1/M2/M3):** Download `Sweesh-${{ github.ref_name }}-arm64.dmg`
+            - **Intel Macs:** Download `Sweesh-${{ github.ref_name }}-x64.dmg`
+            - **Universal:** Download `Sweesh-${{ github.ref_name }}.dmg`
+            
+            **Linux Users (Experimental):**
+            - Download `Sweesh-${{ github.ref_name }}.AppImage`
+            
+            ### 🔧 macOS First-Time Setup
+            1. Open the DMG file
+            2. Drag Sweesh to Applications folder
+            3. Right-click Sweesh → Open (for unsigned builds)
+            4. Grant permissions when prompted:
+               - ✅ Microphone access (required for voice recording)
+               - ✅ Accessibility access (required for global keyboard shortcuts)
+            
+            ### 📝 Full release notes below ⬇️
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
