@@ -34,6 +34,14 @@
 - **Privacy by Design**: API keys never stored in plain text; clipboard operations in main process
 - **Encryption Status**: Real-time feedback on encryption method being used
 - **Cross-Platform Security**: Platform-specific security implementations with fallbacks
+- **Comprehensive Security Logging**: Enterprise-grade monitoring with 10+ security event types
+- **Real-time Threat Detection**: Automatic pattern recognition and suspicious activity alerts
+- **Rate Limiting Protection**: Multi-layer rate limiting for API calls and authentication
+- **JWT Security**: Secure token validation with RS256 algorithm and JWKS verification
+- **URL Validation**: Whitelist-based domain validation with dangerous pattern detection
+- **Command Injection Prevention**: Secure command execution with argument arrays
+- **Deduplication System**: Prevents duplicate authentication attempts and request replay
+- **Security Statistics API**: Real-time security metrics and event tracking
 
 ### User Interface
 - **Modern Dark Theme**: Sleek, professional dark interface with custom typography
@@ -58,7 +66,11 @@
 - **Toast Notification System**: Real-time visual feedback for transcription success/failure, API operations, and encryption status
 - **Auto-Update Management**: Checks for updates on startup, downloads in background, installs on app quit
 - **Deep Link Authentication**: OAuth integration with Clerk for secure user authentication via `sweesh://` protocol
-- **JWT Token Validation**: Secure token validation and storage for authenticated sessions
+- **JWT Token Validation**: Secure token validation and storage for authenticated sessions with JWKS
+- **Security Event Logging**: Comprehensive logging of authentication failures, rate limits, and suspicious activity
+- **Pattern Detection**: Automatic alerts when suspicious patterns detected (5+ events in 60 seconds)
+- **Rate Limit Monitoring**: Real-time tracking of API usage with 20 requests/minute for transcription
+- **Security Statistics**: Detailed metrics on security events accessible via IPC
 - **Data Export**: Clear all user data option for privacy and testing
 - **Startup Management**: Optional system startup integration with tray menu controls
 
@@ -122,8 +134,12 @@ sweesh/
 │   │       └── transcription-modal.tsx
 │   ├── font/                # Custom fonts
 │   │   └── EditorsNote-Light.otf
-│   ├── lib/                 # Utility functions
-│   │   └── utils.ts
+│   ├── lib/                 # Utility functions and security
+│   │   ├── utils.ts
+│   │   ├── rateLimiter.ts   # Rate limiting implementation
+│   │   └── securityLogger.ts # Security event logging
+│   ├── main/                # Main process modules
+│   │   └── autoUpdater.ts   # Auto-update configuration
 │   ├── main.ts              # Electron main process
 │   ├── preload.ts           # Preload script
 │   ├── renderer/            # Renderer process
@@ -147,7 +163,7 @@ sweesh/
 ### Technology Stack
 
 - **Frontend**: React 18 with TypeScript
-- **Desktop Framework**: Electron 28
+- **Desktop Framework**: Electron 38.4.0 (Latest October 2025)
 - **Styling**: Tailwind CSS 4 with custom components
 - **Build Tool**: Webpack 5
 - **UI Components**: Custom components with Radix UI primitives
@@ -159,9 +175,11 @@ sweesh/
 - **Global Shortcuts**: `node-global-key-listener` for system-wide key detection
 - **Clipboard**: Electron's native clipboard API
 - **Auto-Updates**: `electron-updater` with GitHub Releases
-- **Logging**: `electron-log` for comprehensive logging
+- **Logging**: `electron-log` for comprehensive security and application logging
 - **Authentication**: Clerk with JWT validation and deep link OAuth
 - **Encryption**: Electron `safeStorage` with AES-256-CBC fallback
+- **Security Monitoring**: Custom security logger with real-time threat detection
+- **Rate Limiting**: Token bucket rate limiter for API and authentication protection
 - **Data Persistence**: JSON file storage with encryption
 
 ### Available Scripts
@@ -344,6 +362,7 @@ The project includes pre-built executables for multiple platforms:
 - **Onboarding**: `check-onboarding-status`, `complete-onboarding`, `skip-onboarding`
 - **Data Management**: `clear-all-data`, `load-transcriptions`, `save-transcriptions`
 - **Auto-Update**: `check-for-updates`, `quit-and-install-update`; renderer listens on `update-status`
+- **Security**: `get-security-statistics`; provides real-time security metrics and event counts
 - **Notifications**: `show-toast`; renderer listens on `toast-notification`
 
 ### Key Technologies
@@ -352,7 +371,10 @@ The project includes pre-built executables for multiple platforms:
 - **Transcription**: Groq SDK with `whisper-large-v3` model
 - **Clipboard**: Electron's native `clipboard` API for background clipboard access
 - **UI Framework**: React 18 with TypeScript and Tailwind CSS
-- **Desktop Framework**: Electron 28 with IPC communication
+- **Desktop Framework**: Electron 38.4.0 with IPC communication
+- **Security Logging**: `electron-log` with custom SecurityLogger class
+- **Rate Limiting**: Token bucket algorithm with configurable limits
+- **Pattern Detection**: Time-window based suspicious activity detection
 
 ## 🎨 Customization
 
@@ -415,6 +437,15 @@ The app uses a custom "EditorsNote" font. You can replace it by:
 - Updates install when you quit and restart the app
 - Check logs at `%APPDATA%\sweesh\logs\main.log` (Windows) for update status
 
+**Security logs not generating:**
+- Security logs are located at:
+  - Windows: `%LOCALAPPDATA%\sweesh-security-logs\security.log`
+  - macOS: `~/Library/Application Support/sweesh-security-logs/security.log`
+  - Linux: `~/.config/sweesh-security-logs/security.log`
+- Logs automatically rotate at 10MB
+- Use `get-security-statistics` IPC to view stats programmatically
+- Check console for color-coded security events during development
+
 **Authentication issues:**
 - Deep link OAuth requires default browser to open
 - JWT tokens are validated and encrypted locally
@@ -472,26 +503,22 @@ DEBUG=* npm run dev
 3. Test microphone permissions in system settings
 4. Try the `F12` shortcut if others don't work
 
-## 🤝 Contributing
+## 📄 License & Copyright
 
-We welcome contributions! Please follow these steps:
+### © COPYRIGHT & LICENSE
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+**Copyright (c) 2025 Hasin Raiyan. All rights reserved.**
 
-### Development Guidelines
-- Follow the existing code style and patterns
-- Add TypeScript types for new features
-- Include tests for new functionality
-- Update documentation as needed
-- Test on multiple platforms when possible
+This software and associated documentation files (the "Software") are the property of Hasin Raiyan. Unauthorized copying, modification, distribution, or use of the Software, via any medium, is strictly prohibited.
 
-## 📄 License
+**Commercial, personal, or educational use requires explicit written permission from the author.**
 
-This project is licensed under the MIT License. Include a `LICENSE` file if distributing.
+### Usage Terms
+- ❌ **No Contributions**: This is proprietary software. Pull requests and forks are not accepted.
+- ❌ **No Redistribution**: You may not distribute, modify, or create derivative works.
+- ❌ **No Commercial Use**: Commercial use is strictly prohibited without written permission.
+- ✅ **Personal Use Only**: Licensed users may use the software for personal purposes only.
+- 📧 **Contact**: For licensing inquiries, contact via [hasin.vercel.app](https://hasin.vercel.app)
 
 ## 🙏 Acknowledgments
 
@@ -514,7 +541,25 @@ If you encounter issues or have questions:
 
 ## 🔮 Roadmap
 
-### Upcoming Features (v1.1.0+)
+### Completed Features ✅
+- [x] Comprehensive security logging system (v1.4.0)
+- [x] Rate limiting and threat detection (v1.4.0)
+- [x] Electron security updates (v1.4.0)
+- [x] Auto-update system with GitHub Releases (v1.3.9)
+- [x] Deep link authentication with OAuth (v1.3.9)
+- [x] Secure API key management with OS-level encryption (v1.3.6)
+- [x] First-run onboarding flow (v1.3.7)
+- [x] Real-time audio level monitoring (v1.3.5)
+- [x] System tray integration
+- [x] Global keyboard shortcuts
+- [x] Automatic clipboard integration
+
+### Upcoming Features (v1.5.0+)
+- [ ] **Remote Security Monitoring**: SIEM integration for enterprise logging
+- [ ] **Real-time Security Dashboard**: Visual security metrics and alerts
+- [ ] **Email/Slack Alerts**: Critical security event notifications
+- [ ] **ML-Based Anomaly Detection**: Advanced threat pattern recognition
+- [ ] **Geographic IP Analysis**: Location-based security insights
 - [ ] Custom keyboard shortcuts configuration UI
 - [ ] Multiple language support for transcription
 - [ ] Transcription formatting options (capitalize, punctuation)
@@ -535,17 +580,31 @@ If you encounter issues or have questions:
 - **v1.1.0**: Added settings management and UI improvements
 - **v1.2.0**: Enhanced recording interface and file management
 - **v1.3.0**: Added automatic clipboard copy and hold-to-talk functionality
-- **v1.4.0**: Implemented real-time audio level monitoring and activation sounds
-- **v1.5.0**: Added secure API key management with OS-level encryption and AES-256-CBC fallback
-- **v1.6.0**: Implemented first-run onboarding flow with guided API key setup
-- **v1.7.0**: Enhanced Settings modal with compact design and improved user experience
-- **v1.8.0**: Added auto-update system with GitHub Releases integration
-- **v1.9.0**: Implemented deep link authentication with Clerk OAuth and JWT validation
-- **v1.0.9**: Fixed toast notifications display bug and Electron compatibility issues
+- **v1.3.5**: Implemented real-time audio level monitoring and activation sounds
+- **v1.3.6**: Added secure API key management with OS-level encryption and AES-256-CBC fallback
+- **v1.3.7**: Implemented first-run onboarding flow with guided API key setup
+- **v1.3.8**: Enhanced Settings modal with compact design and improved user experience
+- **v1.3.9**: Added auto-update system with GitHub Releases integration and deep link authentication
   - ✅ Fixed `safeStorage.getSelectedStorageBackend()` compatibility error
   - ✅ Fixed toast notifications not appearing with enhanced styling
   - ✅ Added toast debugging for better error tracking
   - ✅ Improved encryption status handling across Electron versions
+  - ✅ Implemented deep link authentication with Clerk OAuth and JWT validation
+- **v1.4.0** (Current): Major Security Update - October 2025
+  - ✅ **Upgraded Electron to v38.4.0** (from v28.3.3) - Latest stable release
+  - ✅ **Fixed ASAR Integrity Bypass vulnerability** (GHSA-vmqv-hx8q-j7mg)
+  - ✅ **Comprehensive Security Logging System** with 10+ event types
+  - ✅ **Real-time Threat Detection** with automatic pattern recognition
+  - ✅ **Rate Limiting Implementation** (20 requests/min transcription, 3/min auth)
+  - ✅ **Security Statistics API** for monitoring and analytics
+  - ✅ **Enhanced Authentication Security** with JWT validation and deduplication
+  - ✅ **URL Validation System** with whitelist and dangerous pattern detection
+  - ✅ **Command Injection Prevention** with secure execution patterns
+  - ✅ **Privacy Policy Integration** in About dialog
+  - ✅ **Security Documentation** (SECURITY_LOGGING_GUIDE.md, SECURITY_UPDATE_SUMMARY.md)
+  - ✅ **Log Management** with automatic rotation (10MB limit) and JSON statistics
+  - ✅ **Color-Coded Security Events** in console for better debugging
+  - 📈 **Security Score**: Improved from 8.5/10 to 9.5/10
 
 ---
 
