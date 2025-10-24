@@ -44,9 +44,10 @@ jobs:
         run: npm run build
       
       - name: Test compilation success
+        shell: bash
         run: |
           echo "✅ Build successful on ${{ matrix.platform }}"
-          ls -la dist/
+          ls -la dist/ || dir dist/
       
       - name: Upload build artifacts (for debugging)
         if: failure()
