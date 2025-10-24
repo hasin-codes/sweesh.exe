@@ -472,26 +472,16 @@ DEBUG=* npm run dev
 3. Test microphone permissions in system settings
 4. Try the `F12` shortcut if others don't work
 
-## 🤝 Contributing
 
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-### Development Guidelines
-- Follow the existing code style and patterns
-- Add TypeScript types for new features
-- Include tests for new functionality
-- Update documentation as needed
-- Test on multiple platforms when possible
 
 ## 📄 License
 
-This project is licensed under the MIT License. Include a `LICENSE` file if distributing.
+© COPYRIGHT & LICENSE
+Copyright (c) 2025 Hasin Raiyan. All rights reserved.
+
+This software and associated documentation files (the "Software") are the property of Hasin Raiyan. Unauthorized copying, modification, distribution, or use of the Software, via any medium, is strictly prohibited.
+
+Commercial, personal, or educational use requires explicit written permission from the author.
 
 ## 🙏 Acknowledgments
 
